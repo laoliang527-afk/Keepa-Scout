@@ -1,23 +1,43 @@
 """
-Keepa API empirical tests.
-Run individually: python -m app.tests.keepa_integration [test_name]
+Keepa API 集成测试（手动运行，不接入 CI）。
+
+用途：
+  通过实际调用 Keepa API，观察以下行为：
+    - 每批最大 ASIN 数量
+    - 不同 UPC 格式的接受情况
+    - stats.current[] 字段含义
+    - buyBoxSellerIdHistory 解码方式
+    - Token 消耗规律
+
+运行：
+  python -m app.tests.keepa_integration              # 列出所有测试
+  python -m app.tests.keepa_integration max_asins   # 仅运行最大 ASIN 数量测试
+  python -m app.tests.keepa_integration upc          # UPC 格式测试
+  python -m app.tests.keepa_integration stats        # stats 字段测试
+  python -m app.tests.keepa_integration history       # BuyBox 历史记录测试
+  python -m app.tests.keepa_integration tokens       # Token 消耗测试
 """
 
 import asyncio
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from app.keepa_client import KeepaClient
 
 
 async def test_max_asins():
-    """Find the max ASINs Keepa accepts per /product call."""
+    """测试 Keepa 每批最大接受 ASIN 数量（逐步增加直到返回空）"""
     client = KeepaClient()
-    known = ["B010MU00UM", "B0CPRLHYRB", "B0DJDMVQJG",
-             "B0BZ5DMMS4", "B006JVZXJM", "B001FB5MBK"]
+    known = [
+        "B010MU00UM", "B0CPRLHYRB", "B0DJDMVQJG",
+        "B0BZ5DMMS4", "B006JVZXJM", "B001FB5MBK",
+    ]
 
     print("\n=== Max ASINs per call test ===")
     for size in [5, 10, 20, 50, 100, 200, 500]:
@@ -33,7 +53,7 @@ async def test_max_asins():
 
 
 async def test_upc_formats():
-    """Test which UPC lengths Keepa accepts."""
+    """测试 Keepa 对不同长度/格式 UPC 的接受情况"""
     client = KeepaClient()
 
     cases = [
@@ -61,13 +81,14 @@ async def test_upc_formats():
 
 
 async def test_stats_current():
-    """Print full stats.current[] for inspection."""
+    """打印 stats.current[] 完整结构，用于理解字段含义"""
     client = KeepaClient()
 
     print("\n=== stats.current[] index inspection ===")
     prods = await client.fetch_products_by_asins(["B010MU00UM"], stats=90, buybox=1)
     if not prods:
-        print("  No product"); return
+        print("  No product")
+        return
 
     p = prods[0]
     current = p.get("current", [])
@@ -75,20 +96,27 @@ async def test_stats_current():
     print(f"  ASIN: {p.get('asin')}")
     print(f"  current[] ({len(current)} entries): {current}")
     print(f"  stats.current: {stats.get('current')}")
-    print(f"  buyBox object keys: {list(p.get('buybox',{}).keys())}")
+    print(f"  buyBox object keys: {list(p.get('buybox', {}).keys())}")
 
 
 async def test_buybox_history():
-    """Inspect buyBoxSellerIdHistory decoding."""
+    """
+    检查 buyBoxSellerIdHistory 的解码方式。
+
+    Keepa 返回格式：[timestamp, sellerId, timestamp, sellerId, ...]
+    取奇数位（索引 1, 3, 5, ...）即为 seller ID 序列。
+    """
     client = KeepaClient()
 
     print("\n=== buyBoxSellerIdHistory inspection ===")
     for asin in ["B010MU00UM", "B0CPRLHYRB", "B0DJDMVQJG", "B006JVZXJM"]:
         prods = await client.fetch_products_by_asins([asin], buybox=1)
-        if not prods: continue
+        if not prods:
+            continue
         p = prods[0]
         hist = p.get("buyBoxSellerIdHistory", [])
-        if not hist: continue
+        if not hist:
+            continue
         sellers = hist[1::2]
         amazon_count = sum(1 for s in sellers if s == "ATVPDKIKX0DER")
         total = len(sellers)
@@ -103,7 +131,7 @@ async def test_buybox_history():
 
 
 async def test_token_cost():
-    """Token cost formula observation."""
+    """观察不同参数组合下的 Keepa token 消耗量"""
     client = KeepaClient()
 
     print("\n=== Token cost observation ===")

@@ -1,7 +1,13 @@
 """
-ETL script: reads sample_asins.csv, fetches Keepa data, upserts into DB.
+ETL 脚本：从 CSV 读取 ASIN 列表，调用 Keepa API，批量入库。
 
-Run: python -m app.etl
+流程：
+  1. 读取 data/sample_asins.csv（ASIN + supplier_cost）
+  2. 批量请求 Keepa API（每批最多 20 个 ASIN）
+  3. 解析 Keepa 响应，计算 ROI 及准入状态
+  4. INSERT OR REPLACE 入库（幂等，可重复运行）
+
+运行：python -m app.etl
 """
 
 import asyncio
@@ -22,11 +28,15 @@ from app.keepa_client import KeepaClient
 load_dotenv()
 
 CSV_PATH = os.getenv("CSV_PATH", "data/sample_asins.csv")
-BATCH_SIZE = 20  # Keepa recommended batch size
+BATCH_SIZE = 20  # Keepa 建议每批 20 个 ASIN
 
 
 async def load_supplier_costs(csv_path: str) -> dict[str, float]:
-    """Load asin -> supplier_cost from CSV."""
+    """
+    读取 CSV 文件，返回 {asin: supplier_cost} 字典。
+
+    CSV 格式：asin,supplier_cost
+    """
     costs = {}
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -38,7 +48,12 @@ async def load_supplier_costs(csv_path: str) -> dict[str, float]:
 
 
 async def fetch_asins_in_batches(client: KeepaClient, asins: list[str]) -> list[dict]:
-    """Fetch all ASINs from Keepa in batches. Partial success is OK."""
+    """
+    批量从 Keepa 获取 ASIN 数据。
+
+    遇到网络错误时保存已获取的 ASIN 并退出；
+    每批之间等待 0.5 秒避免触发限流。
+    """
     all_parsed = []
     for i in range(0, len(asins), BATCH_SIZE):
         batch = asins[i : i + BATCH_SIZE]
@@ -60,7 +75,14 @@ def build_record(
     supplier_cost: float,
     keepa_data: dict,
 ) -> dict:
-    """Compute all derived fields for one ASIN."""
+    """
+    根据 Keepa 数据和供应商成本，构建一条完整的 ASIN 记录。
+
+    计算步骤：
+      1. 提取 BuyBox、佣金、FBA 费等字段
+      2. 调用 compute_roi() 计算 ROI
+      3. 调用 check_eligibility() 判断是否符合准入规则
+    """
     buybox = keepa_data.get("buybox") if keepa_data else None
     referral_fee = keepa_data.get("referral_fee_pct") if keepa_data else None
     fba_cents = keepa_data.get("fba_pick_pack_cents") or 0
@@ -102,7 +124,12 @@ def build_record(
 
 
 async def upsert_asins(records: list[dict]):
-    """Insert or replace ASIN records. Idempotent via INSERT OR REPLACE."""
+    """
+    将 ASIN 记录批量写入数据库。
+
+    使用 INSERT OR REPLACE：ASIN 存在则更新，不存在则插入。
+    每次运行 ETL 时结果一致（幂等）。
+    """
     if not records:
         return
     from sqlalchemy import text
@@ -125,7 +152,7 @@ async def upsert_asins(records: list[dict]):
 
 
 async def run_etl():
-    """Main ETL entry point."""
+    """ETL 主入口"""
     csv_abspath = os.path.join(os.path.dirname(os.path.dirname(__file__)), CSV_PATH)
     if not os.path.exists(csv_abspath):
         print(f"ERROR: CSV not found at {csv_abspath}")
@@ -133,12 +160,12 @@ async def run_etl():
 
     await init_db()
 
-    # Load supplier costs
+    # 1. 读取供应商成本
     costs = await load_supplier_costs(csv_abspath)
     asins = list(costs.keys())
     print(f"Loaded {len(asins)} ASINs from CSV")
 
-    # Fetch from Keepa
+    # 2. 从 Keepa 获取数据
     client = KeepaClient()
     keepa_results: dict[str, dict] = {}
 
@@ -150,13 +177,14 @@ async def run_etl():
 
     print(f"Got {len(keepa_results)} products from Keepa")
 
-    # Build records
+    # 3. 构建记录（计算 ROI + 准入状态）
     records = []
     for asin, supplier_cost in costs.items():
         keepa_data = keepa_results.get(asin, {})
         rec = build_record(asin, supplier_cost, keepa_data)
         records.append(rec)
 
+    # 4. 入库
     await upsert_asins(records)
     print(f"ETL complete — {len(records)} ASINs upserted")
     print(f"Keepa tokens used: {client.tokens_used}")
