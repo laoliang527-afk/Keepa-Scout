@@ -1,0 +1,37 @@
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite
+*.db
+data/*.db
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Git
+.git/
+.github/
+
+# Cache
+.cache/
+
+# Test/debug files
+test_debug.py
+test_ui.html
+docs/

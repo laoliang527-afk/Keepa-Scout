@@ -1,16 +1,30 @@
-FROM python:3.12-slim
+# Build stage: install dependencies
+# Using Daocloud mirror for China network compatibility
+FROM docker.m.daocloud.io/library/python:3.11-slim AS deps
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Install psycopg for PostgreSQL
-RUN pip install --no-cache-dir psycopg[binary]
+# Runtime stage
+FROM docker.m.daocloud.io/library/python:3.11-slim
 
-COPY . .
+WORKDIR /app
 
-# Create data directory
-RUN mkdir -p /app/data
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from deps stage
+COPY --from=deps /install /usr/local
+
+# Copy only what Docker needs (data/ is mounted at runtime via volume)
+COPY app/ ./app/
+COPY data/ ./data/
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
+
+CMD ["sh", "-c", "python -m app.etl && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

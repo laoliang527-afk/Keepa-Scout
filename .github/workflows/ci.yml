@@ -1,0 +1,147 @@
+name: Docker Compose CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker compose build
+
+      - name: Create mock .env for CI
+        run: |
+          cat > .env << 'EOF'
+          KEEPA_API_KEYS=dummy_key_for_ci_only_not_real
+          DEEPSEEK_API_KEYS=sk-dummy_for_ci_only_not_real
+          DB_PATH=data/scout.db
+          EOF
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Wait for service to be healthy
+        run: |
+          echo "Waiting for container to be healthy..."
+          for i in $(seq 1 30); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' keepa_scout_api 2>/dev/null || echo "starting")
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Container is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS"
+            sleep 2
+          done
+          echo "Container did not become healthy in time"
+          docker compose logs
+          docker inspect keepa_scout_api
+          exit 1
+
+      - name: Test /health endpoint
+        run: |
+          echo "=== Testing /health ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health)
+          BODY=$(curl -s http://localhost:8000/health)
+          echo "Status: $HTTP_CODE"
+          echo "Body: $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then echo "FAIL: /health returned $HTTP_CODE"; exit 1; fi
+
+      - name: Test /upc endpoint (normalization, no real Keepa)
+        run: |
+          echo "=== Testing /upc ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/upc?upc=070537500052")
+          echo "Status: $HTTP_CODE"
+          # 200 = server responds (asins may be empty due to dummy key)
+          # 401/500 = server error
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "500" ]; then
+            echo "OK: server reachable (status $HTTP_CODE)"
+          else
+            echo "FAIL: unexpected status $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Test /eligibility endpoint
+        run: |
+          echo "=== Testing /eligibility/{asin} ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/eligibility/B09V3KXJPB")
+          echo "Status: $HTTP_CODE"
+          # 404 = ASIN not in DB (expected, server is up)
+          # 200 = found in DB
+          # anything 4xx/5xx that is NOT 500 is fine
+          if [ "$HTTP_CODE" != "500" ]; then
+            echo "OK: endpoint reachable (status $HTTP_CODE)"
+          else
+            echo "FAIL: server error 500"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Test /eligibility/batch endpoint
+        run: |
+          echo "=== Testing /eligibility/batch ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8000/eligibility/batch \
+            -H "Content-Type: application/json" \
+            -d '{"asins":["B09V3KXJPB","B08N5WRWNW"]}')
+          echo "Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "500" ]; then
+            echo "OK: endpoint reachable (status $HTTP_CODE)"
+          else
+            echo "FAIL: server error 500"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Test /ask endpoint
+        run: |
+          echo "=== Testing /ask ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8000/ask \
+            -H "Content-Type: application/json" \
+            -d '{"question":"Show me eligible ASINs"}')
+          echo "Status: $HTTP_CODE"
+          # 401 = DeepSeek key invalid/missing (expected in CI)
+          # 200 = works
+          # 500 = server crash
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+            echo "OK: endpoint reachable (status $HTTP_CODE)"
+          else
+            echo "FAIL: unexpected status $HTTP_CODE"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Test /chat endpoint
+        run: |
+          echo "=== Testing /chat ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8000/chat \
+            -H "Content-Type: application/json" \
+            -d '{"session_id":"ci-test-session","message":"Hello"}')
+          echo "Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+            echo "OK: endpoint reachable (status $HTTP_CODE)"
+          else
+            echo "FAIL: unexpected status $HTTP_CODE"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

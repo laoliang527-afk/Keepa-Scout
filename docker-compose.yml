@@ -7,17 +7,18 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - scout_data:/app/data
     env_file:
       - .env
     environment:
       DB_PATH: /app/data/scout.db
     restart: unless-stopped
-    command: >
-      sh -c "
-        python -m app.etl &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000
-      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
-  data:
+  scout_data:
