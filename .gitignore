@@ -1,40 +1,29 @@
-# ── Internal-only — never push these ──
-internal/
-candidate_simulation/.venv/
-candidate_simulation/data/*.db*
-*.env
-.env
-.env.local
-
-# ── Python ──
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-.venv/
+
+# Virtual environments
 venv/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+env/
+.venv/
 
-# ── DB / state ──
-*.db
-*.db-shm
-*.db-wal
-data/scout.db*
+# Environment variables (keep real .env out of repo)
+.env
 
-# ── OS / IDE ──
-.DS_Store
+# IDE
 .idea/
-.vscode/
-*.swp
 
-# ── Logs ──
+# SQLite database
+*.db
+data/*.db
+
+# Keepa token / log files
 *.log
-/tmp/
 
-# ── Allowed exceptions ──
-!candidate_package/data/sample_asins.csv
-!candidate_package/data/upc_test_cases.json
+# macOS
+.DS_Store
+
+# Keepa raw responses (if cached)
+.cache/
