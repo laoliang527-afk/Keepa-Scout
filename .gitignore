@@ -9,9 +9,6 @@ venv/
 env/
 .venv/
 
-# Environment variables (keep real .env out of repo)
-.env
-
 # IDE
 .idea/
 
