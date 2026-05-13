@@ -2,14 +2,16 @@ from typing import Optional, Tuple
 
 # ── Payout ─────────────────────────────────────────────────────────────────────
 
-def compute_payout(buybox: float, referral_fee_pct: float, fba_pick_pack_cents: int) -> float:
+def compute_payout(buybox: Optional[float], referral_fee_pct: Optional[float], fba_pick_pack_cents: Optional[int]) -> float:
     """
     Net payout after Amazon fees.
     buybox: in dollars
     referral_fee_pct: e.g. 15.0 for 15%
     fba_pick_pack_cents: Keepa returns cents
     """
-    if buybox <= 0 or referral_fee_pct < 0:
+    if buybox is None or buybox <= 0:
+        return 0.0
+    if referral_fee_pct is None or referral_fee_pct < 0:
         return 0.0
     referral = buybox * (referral_fee_pct / 100)
     fba = (fba_pick_pack_cents or 0) / 100
@@ -30,6 +32,8 @@ def compute_roi(
     Returns None if cost is zero or negative.
     """
     if supplier_cost is None or supplier_cost <= 0:
+        return None
+    if buybox is None or buybox <= 0:
         return None
     payout = compute_payout(buybox, referral_pct, fba_pick_pack_cents)
     items = max(n_items or 1, 1)

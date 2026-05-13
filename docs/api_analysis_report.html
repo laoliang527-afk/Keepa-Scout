@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keepa Scout — 项目分析报告</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --surface: #1c2128;
+    --surface2: #22272e;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #2f81f7;
+    --accent-bg: rgba(47,129,247,0.1);
+    --green: #3fb950;
+    --green-bg: rgba(63,185,80,0.1);
+    --yellow: #d29922;
+    --yellow-bg: rgba(210,153,34,0.1);
+    --red: #f85149;
+    --red-bg: rgba(248,81,73,0.1);
+    --purple: #a371f7;
+    --purple-bg: rgba(163,113,247,0.1);
+    --code-bg: #161b22;
+    --font-mono: 'JetBrains Mono','Fira Code','Cascadia Code',Menlo,monospace;
+    --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ── Header ── */
+  .header { border-bottom: 1px solid var(--border); padding-bottom: 32px; margin-bottom: 48px; }
+  .header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .header .subtitle { color: var(--text-muted); font-size: 1rem; margin-bottom: 24px; }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; font-family: var(--font-mono); font-weight: 600; }
+  .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(163,113,247,0.3); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+
+  /* ── Section ── */
+  .section { margin-bottom: 56px; }
+  .section-title { font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .section-title::before { content: ''; width: 3px; height: 16px; background: var(--accent); border-radius: 2px; }
+  h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 16px; margin-top: 40px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 12px; margin-top: 28px; }
+  p { margin-bottom: 12px; }
+  .lead { color: var(--text-muted); font-size: 0.97rem; }
+
+  /* ── Cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+
+  /* ── Endpoint ── */
+  .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 28px; overflow: hidden; }
+  .endpoint-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .endpoint-body { padding: 20px 24px; }
+  .method { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 5px; flex-shrink: 0; }
+  .method-get { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .method-post { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(47,129,247,0.3); }
+  .endpoint-path { font-family: var(--font-mono); font-size: 0.9rem; flex: 1; }
+
+  /* ── Code ── */
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.65; margin: 12px 0; color: #e6edf3; }
+  code { font-family: var(--font-mono); font-size: 0.85em; color: #79c0ff; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre code { color: inherit; background: none; padding: 0; }
+  .ln { color: var(--text-muted); user-select: none; margin-right: 16px; }
+  .comment { color: #8b949e; font-style: italic; }
+  .keyword { color: #ff7b72; }
+  .string { color: #a5d6ff; }
+  .func { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+
+  /* ── Tags ── */
+  .tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .tag { padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-family: var(--font-mono); }
+  .tag-good { background: var(--green-bg); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .tag-perf { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(47,129,247,0.3); }
+  .tag-warn { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; }
+  th { background: var(--surface2); color: var(--text-muted); font-weight: 600; text-align: left; padding: 10px 14px; border: 1px solid var(--border); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 10px 14px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  td code { font-size: 0.82em; }
+
+  /* ── Highlights ── */
+  .hl { padding: 14px 18px; border-radius: 0 6px 6px 0; margin: 14px 0; }
+  .hl-purple { border-left: 3px solid var(--purple); background: var(--purple-bg); }
+  .hl-warn { border-left: 3px solid var(--yellow); background: var(--yellow-bg); }
+  .hl-good { border-left: 3px solid var(--green); background: var(--green-bg); }
+  .hl-accent { border-left: 3px solid var(--accent); background: var(--accent-bg); }
+  .hl h4 { font-size: 0.9rem; margin-bottom: 8px; font-weight: 700; }
+
+  /* ── Flow ── */
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .flow-step { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; font-family: var(--font-mono); font-size: 0.8rem; white-space: nowrap; }
+  .flow-arrow { color: var(--text-muted); font-size: 1.1rem; flex-shrink: 0; }
+  .flow-ext { background: var(--accent-bg); border-color: rgba(47,129,247,0.3); color: var(--accent); }
+  .flow-db { background: var(--purple-bg); border-color: rgba(163,113,247,0.3); color: var(--purple); }
+
+  /* ── TOC ── */
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 32px; }
+  .toc-title { font-weight: 700; margin-bottom: 12px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 4px; font-size: 0.9rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── Misc ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+  .note { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+  .rule-table { margin-top: 12px; }
+  .rule-table td:first-child { color: var(--accent); font-family: var(--font-mono); font-size: 0.82rem; text-align: center; width: 40px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ HEADER -->
+<div class="header">
+  <h1>Keepa Scout — 项目分析报告</h1>
+  <p class="subtitle">FastAPI · Keepa API · DeepSeek LLM · SQLite · ETL Pipeline</p>
+  <div class="badges">
+    <span class="badge badge-green">FastAPI</span>
+    <span class="badge badge-purple">Keepa API</span>
+    <span class="badge badge-purple">DeepSeek LLM</span>
+    <span class="badge badge-yellow">SQLite</span>
+    <span class="badge badge-green">AsyncIO</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ TOC -->
+<div class="toc">
+  <div class="toc-title">目录</div>
+  <ol>
+    <li><a href="#arch">系统架构</a></li>
+    <li><a href="#startup">启动时做的事</a></li>
+    <li><a href="#health">/health — 健康检查</a></li>
+    <li><a href="#upc">/upc — UPC→ASIN 商品识别</a></li>
+    <li><a href="#eligibility">/eligibility — ROI + 合规性分析</a></li>
+    <li><a href="#ask">/ask — 自然语言 SQL 查询</a></li>
+    <li><a href="#chat">/chat — 多轮会话 + 上下文记忆</a></li>
+    <li><a href="#highlights">代码亮点</a></li>
+    <li><a href="#optimizations">功能完善 & 性能优化</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ARCH -->
+<div class="section" id="arch">
+  <div class="section-title">系统架构</div>
+
+  <div class="two-col">
+    <div>
+      <h3>技术栈</h3>
+      <table>
+        <tr><th>组件</th><th>技术选型</th></tr>
+        <tr><td>Web 框架</td><td>FastAPI + Starlette</td></tr>
+        <tr><td>数据库</td><td>SQLite + aiosqlite（异步）</td></tr>
+        <tr><td>ORM</td><td>SQLAlchemy 2.0 MappedColumn</td></tr>
+        <tr><td>商品数据</td><td>Keepa API</td></tr>
+        <tr><td>自然语言</td><td>DeepSeek Chat API</td></tr>
+        <tr><td>并发</td><td>asyncio + httpx（全部异步）</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>数据模型</h3>
+      <table>
+        <tr><th>表</th><th>用途</th></tr>
+        <tr><td><code>asins</code></td><td>ASIN + Keepa数据 + ROI + 合规性</td></tr>
+        <tr><td><code>chat_sessions</code></td><td>多轮对话 session 状态</td></tr>
+      </table>
+      <h3 style="margin-top:16px;">索引</h3>
+      <table>
+        <tr><th>索引</th><th>用途</th></tr>
+        <tr><td><code>idx_eligible</code></td><td>WHERE eligible=1</td></tr>
+        <tr><td><code>idx_roi</code></td><td>ORDER BY roi DESC</td></tr>
+        <tr><td><code>idx_eligible_roi</code></td><td>复合索引（最常见查询）</td></tr>
+        <tr><td><code>idx_amazon_buybox_pct</code></td><td>Amazon 占比查询</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <pre><code>容器启动（lifespan）
+  │
+  ├── init_db()          → 创建所有表 + 索引
+  ├── run_etl()          → CSV → Keepa → DB
+  │     ├── load_supplier_costs()   读取 CSV（ASIN + 供应商成本）
+  │     ├── fetch_asins_in_batches() KeepaClient 批量拉取（每批 20 ASIN）
+  │     │     └── parse_product()
+  │     │           ├── stats.buyBoxPrice    → BuyBox 价格
+  │     │           ├── stats.avg[3]        → 90天平均排名
+  │     │           ├── buyBoxSellerIdHistory → Amazon 占比推算
+  │     │           └── referralFeePercentage → 佣金费率
+  │     ├── build_record()  → compute_roi() + check_eligibility()
+  │     └── upsert_asins()  → INSERT OR REPLACE（幂等写入）
+  │
+  └── API 服务就绪
+
+运行时请求
+  /health        → SELECT 1（DB 连通性）
+  /upc           → normalize_upc() → Keepa /product?code= → ASIN
+  /eligibility   → SQLite 查询 → check_eligibility() → 逐条规则判断
+  /ask           → DeepSeek NL→SQL → 执行 → DeepSeek 格式化答案
+  /chat          → SQLite 查 session → DeepSeek → 写入 session_state</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ STARTUP -->
+<div class="section" id="startup">
+  <div class="section-title">启动时做的事</div>
+
+  <p class="lead">FastAPI 容器启动时，通过 <code>lifespan</code> 上下文管理器自动执行数据库初始化和 ETL 数据导入，全程自动化，容器就绪时 DB 已有数据。</p>
+
+  <h3>database.py — 异步连接管理</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">import</span> os
+<span class="ln"> 2</span> <span class="keyword">from</span> contextlib <span class="keyword">import</span> asynccontextmanager
+<span class="ln"> 3</span> <span class="keyword">from</span> sqlalchemy.ext.asyncio <span class="keyword">import</span> AsyncSession, create_async_engine, async_sessionmaker
+<span class="ln"> 4</span> <span class="keyword">from</span> sqlalchemy.orm <span class="keyword">import</span> DeclarativeBase
+<span class="ln"> 5</span>
+<span class="ln"> 6</span> DB_PATH = os.getenv(<span class="string">"DB_PATH"</span>, <span class="string">"data/scout.db"</span>)
+<span class="ln"> 7</span> <span class="keyword">if not</span> os.path.isabs(DB_PATH):
+<span class="ln"> 8</span>     DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), DB_PATH)
+<span class="ln"> 9</span>
+<span class="ln">10</span> DATABASE_URL = f<span class="string">"sqlite+aiosqlite:///{DB_PATH}"</span>   <span class="comment"># 异步驱动</span>
+<span class="ln">11</span> engine = create_async_engine(DATABASE_URL, echo=<span class="bool">False</span>)
+<span class="ln">12</span> async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=<span class="bool">False</span>)
+<span class="ln">13</span>
+<span class="ln">14</span> <span class="keyword">class</span> <span class="func">Base</span>(DeclarativeBase):
+<span class="ln">15</span>     <span class="keyword">pass</span>
+<span class="ln">16</span>
+<span class="ln">17</span> <span class="keyword">async def</span> <span class="func">init_db</span>():
+<span class="ln">18</span>     async <span class="keyword">with</span> engine.begin() <span class="keyword">as</span> conn:
+<span class="ln">19</span>         await conn.run_sync(Base.metadata.create_all)   <span class="comment"># 创建所有表+索引</span>
+<span class="ln">20</span>
+<span class="ln">21</span> <span class="keyword">@asynccontextmanager</span>
+<span class="ln">22</span> <span class="keyword">async def</span> <span class="func">get_db</span>():                            <span class="comment"># 依赖注入用（可选）</span>
+<span class="ln">23</span>     async <span class="keyword">with</span> async_session_maker() <span class="keyword">as</span> session:
+<span class="ln">24</span>         <span class="keyword">try</span>:
+<span class="ln">25</span>             yield session
+<span class="ln">26</span>             await session.commit()
+<span class="ln">27</span>         <span class="keyword">except Exception</span>:
+<span class="ln">28</span>             await session.rollback()
+<span class="ln">29</span>             <span class="keyword">raise</span></code></pre>
+  <p class="note">使用 <code>sqlite+aiosqlite://</code> 异步驱动，配合 SQLAlchemy <code>async_sessionmaker</code>，所有 DB 操作均为非阻塞。</p>
+
+  <h3>main.py — Lifespan 入口</h3>
+<pre><code><span class="ln">42</span> <span class="keyword">@asynccontextmanager</span>
+<span class="ln">43</span> <span class="keyword">async def</span> <span class="func">lifespan</span>(app: FastAPI):
+<span class="ln">44</span>     await init_db()          <span class="comment"># 1. 建表（幂等，多次启动安全）</span>
+<span class="ln">45</span>     yield                   <span class="comment"># 2. 服务运行中...</span>
+<span class="ln">46</span>     await engine.dispose()   <span class="comment"># 3. 关闭时释放连接池</span>
+<span class="ln">47</span>
+<span class="ln">48</span> app = FastAPI(lifespan=lifespan)   <span class="comment"># 注册到 FastAPI</span></code></pre>
+  <p class="note"><code>yield</code> 前是启动代码，后是关闭清理代码。ETL 放在 lifespan 中，启动即触发，无需单独脚本。</p>
+
+  <h3>etl.py — 完整 ETL 管道</h3>
+<pre><code><span class="ln"> 1</span> <span class="comment"># ── CSV 读取 ─────────────────────────────────────────────────────</span>
+<span class="ln"> 2</span> <span class="keyword">async def</span> <span class="func">load_supplier_costs</span>(csv_path: str) -> dict[str, float]:
+<span class="ln"> 3</span>     costs = {}
+<span class="ln"> 4</span>     <span class="keyword">with</span> open(csv_path, newline=<span class="string">""</span>, encoding=<span class="string">"utf-8"</span>) <span class="keyword">as</span> f:
+<span class="ln"> 5</span>         reader = csv.DictReader(f)
+<span class="ln"> 6</span>         <span class="keyword">for</span> row <span class="keyword">in</span> reader:
+<span class="ln"> 7</span>             costs[row[<span class="string">"asin"</span>].strip()] = float(row[<span class="string">"supplier_cost"</span>].strip())
+<span class="ln"> 8</span>     <span class="keyword">return</span> costs
+<span class="ln"> 9</span>
+<span class="ln">10</span> <span class="comment"># ── Keepa 批量拉取 ───────────────────────────────────────────────</span>
+<span class="ln">11</span> <span class="keyword">async def</span> <span class="func">fetch_asins_in_batches</span>(client: KeepaClient, asins: list[str]) -> list[dict]:
+<span class="ln">12</span>     all_parsed = []
+<span class="ln">13</span>     <span class="keyword">for</span> i <span class="keyword">in</span> range(<span class="num">0</span>, len(asins), BATCH_SIZE):     <span class="comment"># BATCH_SIZE = 20</span>
+<span class="ln">14</span>         batch = asins[i : i + BATCH_SIZE]
+<span class="ln">15</span>         products = <span class="keyword">await</span> client.<span class="func">fetch_products_by_asins</span>(batch)
+<span class="ln">16</span>         <span class="keyword">for</span> p <span class="keyword">in</span> products:
+<span class="ln">17</span>             all_parsed.<span class="func">append</span>(client.<span class="func">parse_product</span>(p))
+<span class="ln">18</span>         await asyncio.<span class="func">sleep</span>(<span class="num">0.5</span>)                    <span class="comment"># 批次间等待（token 回充）</span>
+<span class="ln">19</span>     <span class="keyword">return</span> all_parsed
+<span class="ln">20</span>
+<span class="ln">21</span> <span class="comment"># ── ROI + 合规性计算 ─────────────────────────────────────────────</span>
+<span class="ln">22</span> <span class="keyword">def</span> <span class="func">build_record</span>(asin, supplier_cost, keepa_data) -> dict:
+<span class="ln">23</span>     roi = <span class="func">compute_roi</span>(buybox, referral, fba_cents, supplier_cost, n_items)
+<span class="ln">24</span>     eligible, filter_failed = <span class="func">check_eligibility</span>(
+<span class="ln">25</span>         referral, sales_rank, monthly_sold, buybox, amazon_pct)
+<span class="ln">26</span>     <span class="keyword">return</span> {<span class="string">"asin"</span>: asin, ..., <span class="string">"eligible"</span>: eligible, <span class="string">"filter_failed"</span>: filter_failed, ...}
+<span class="ln">27</span>
+<span class="ln">28</span> <span class="comment"># ── 幂等写入 ────────────────────────────────────────────────────</span>
+<span class="ln">29</span> <span class="keyword">async def</span> <span class="func">upsert_asins</span>(records: list[dict]):
+<span class="ln">30</span>     <span class="keyword">for</span> rec <span class="keyword">in</span> records:
+<span class="ln">31</span>         <span class="keyword">await</span> session.<span class="func">execute</span>(
+<span class="ln">32</span>             text(<span class="string">"INSERT OR REPLACE INTO asins ..."</span>)  <span class="comment"># 存在则替换</span>
+<span class="ln">33</span>         )
+<span class="ln">34</span>     await session.<span class="func">commit</span>()
+<span class="ln">35</span>
+<span class="ln">36</span> <span class="comment"># ── 启动入口 ────────────────────────────────────────────────────</span>
+<span class="ln">37</span> <span class="keyword">async def</span> <span class="func">run_etl</span>():
+<span class="ln">38</span>     await init_db()
+<span class="ln">39</span>     costs = <span class="keyword">await</span> <span class="func">load_supplier_costs</span>(CSV_PATH)
+<span class="ln">40</span>     products = <span class="keyword">await</span> <span class="func">fetch_asins_in_batches</span>(KeepaClient(), list(costs.keys()))
+<span class="ln">41</span>     records = [<span class="func">build_record</span>(asin, costs[asin], keepa_results.get(asin, {}))
+<span class="ln">42</span>               <span class="keyword">for</span> asin, cost <span class="keyword">in</span> costs.items()]
+<span class="ln">43</span>     await <span class="func">upsert_asins</span>(records)</code></pre>
+  <p class="note">用 <code>INSERT OR REPLACE</code> 实现幂等写入，多次启动 ETL 不会重复数据，只更新已有记录。</p>
+
+  <h3>keepa_client.py — Keepa 数据解析</h3>
+<pre><code><span class="ln"> 1</span> <span class="comment"># Keepa stats.current[] index mapping (US / domain=1)</span>
+<span class="ln"> 2</span> AMAZON_SELLER_ID = <span class="string">"ATVPDKIKX0DER"</span>
+<span class="ln"> 3</span>
+<span class="ln"> 4</span> <span class="keyword">def</span> <span class="func">parse_product</span>(self, p: dict) -> dict:
+<span class="ln"> 5</span>     <span class="comment"># BuyBox 价格：优先用 stats.buyBoxPrice（最可靠），fallback 到 current[0]</span>
+<span class="ln"> 6</span>     stats_data = p.<span class="func">get</span>(<span class="string">"stats"</span>, {}) <span class="keyword">or</span> {}
+<span class="ln"> 7</span>     buybox_cents = stats_data.<span class="func">get</span>(<span class="string">"buyBoxPrice"</span>)
+<span class="ln"> 8</span>     <span class="keyword">if</span> buybox_cents <span class="keyword">is None or</span> buybox_cents < <span class="num">0</span>:
+<span class="ln"> 9</span>         buybox_cents = _safe_idx(p.<span class="func">get</span>(<span class="string">"current"</span>) <span class="keyword">or</span> [], <span class="num">0</span>)
+<span class="ln">10</span>     result[<span class="string">"buybox"</span>] = _cents_to_dollars(buybox_cents)
+<span class="ln">11</span>
+<span class="ln">12</span>     <span class="comment"># 销售排名：stats.avg[3] = 90天平均排名（最稳定），fallback 到 current[2]</span>
+<span class="ln">13</span>     stats_avg = stats_data.<span class="func">get</span>(<span class="string">"avg"</span>) <span class="keyword">or</span> []
+<span class="ln">14</span>     sales_rank = _safe_idx(stats_avg, <span class="num">3</span>)
+<span class="ln">15</span>     <span class="keyword">if</span> sales_rank <span class="keyword">is None or</span> sales_rank < <span class="num">0</span>:
+<span class="ln">16</span>         sales_rank = _safe_idx(p.<span class="func">get</span>(<span class="string">"current"</span>) <span class="keyword">or</span> [], <span class="num">2</span>)
+<span class="ln">17</span>
+<span class="ln">18</span>     <span class="comment"># Amazon BuyBox 占比：从历史推算（buyBoxSellerIdHistory 交替排列）</span>
+<span class="ln">19</span>     history = p.<span class="func">get</span>(<span class="string">"buyBoxSellerIdHistory"</span>, [])
+<span class="ln">20</span>     seller_ids = history[<span class="num">1</span>::<span class="num">2</span>]                        <span class="comment"># 取奇数位 = 卖家ID</span>
+<span class="ln">21</span>     amazon_count = <span class="func">sum</span>(<span class="num">1</span> <span class="keyword">for</span> sid <span class="keyword">in</span> seller_ids <span class="keyword">if</span> sid == AMAZON_SELLER_ID)
+<span class="ln">22</span>     result[<span class="string">"amazon_buybox_pct"</span>] = <span class="func">round</span>(<span class="num">100.0</span> * amazon_count / len(seller_ids), <span class="num">2</span>)</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ENDPOINT: HEALTH -->
+<div class="section" id="health">
+  <div class="section-title">接口 1 /health</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-get">GET</span>
+      <span class="endpoint-path">/health</span>
+    </div>
+    <div class="endpoint-body">
+
+      <h3>接口意义</h3>
+      <p>健康检查接口，用于容器编排（Docker/K8s readiness probe）、负载均衡探活、监控告警。快速判断服务是否就绪，不依赖业务数据。</p>
+      <p>执行 <code>SELECT 1</code> 验证 DB 连接，返回 JSON：<code>status</code>（服务状态）+ <code>db</code>（连接状态）+ <code>timestamp</code>。</p>
+
+      <h3>代码</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">@app.get</span>(<span class="string">"/health"</span>, response_model=HealthResponse)
+<span class="ln"> 2</span> <span class="keyword">async def</span> <span class="func">health</span>():
+<span class="ln"> 3</span>     <span class="keyword">try</span>:
+<span class="ln"> 4</span>         async <span class="keyword">with</span> async_session_maker() <span class="keyword">as</span> session:
+<span class="ln"> 5</span>             <span class="keyword">await</span> session.<span class="func">execute</span>(text(<span class="string">"SELECT 1"</span>))
+<span class="ln"> 6</span>         db_status = <span class="string">"ok"</span>
+<span class="ln"> 7</span>     <span class="keyword">except Exception</span>:
+<span class="ln"> 8</span>         db_status = <span class="string">"error"</span>
+<span class="ln"> 9</span>     <span class="keyword">return</span> HealthResponse(status=<span class="string">"ok"</span>, db=db_status, timestamp=datetime.utcnow())</code></pre>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ENDPOINT: UPC -->
+<div class="section" id="upc">
+  <div class="section-title">接口 2 /upc</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-get">GET</span>
+      <span class="endpoint-path">/upc?upc=...</span>
+    </div>
+    <div class="endpoint-body">
+
+      <h3>接口意义</h3>
+      <p>将 <strong>UPC/EAN/ISBN 条码</strong>转换为 <strong>ASIN</strong>。用户有实物商品，通过条形码找到对应的 Amazon 商品信息。UPC 格式多变（11/12/13/14位、带连字符等），需归一化后再查。</p>
+
+      <h3>数据流</h3>
+      <div class="flow">
+        <span class="flow-step">用户输入<br><code>0081124101532</code></span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-ext"><code>normalize_upc()</code><br>格式归一化</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-ext">Keepa<br><code>/product?code=</code></span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-db">提取 ASIN</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">去重返回<br><code>asins[]</code></span>
+      </div>
+
+      <h3>upc_normalizer.py — 核心逻辑</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">def</span> <span class="func">normalize_upc</span>(raw: str) -> list[str]:
+<span class="ln"> 2</span>     digits = <span class="string">""</span>.<span class="func">join</span>(ch <span class="keyword">for</span> ch <span class="keyword">in</span> raw <span class="keyword">if</span> ch.isdigit())  <span class="comment"># 只保留数字</span>
+<span class="ln"> 3</span>     <span class="keyword">if not</span> digits:
+<span class="ln"> 4</span>         <span class="keyword">return</span> []
+<span class="ln"> 5</span>
+<span class="ln"> 6</span>     <span class="comment"># 11位 → UPC-E，展开为12位 UPC-A（按校验位规则展开）</span>
+<span class="ln"> 7</span>     <span class="keyword">if</span> len(digits) == <span class="num">11</span>:
+<span class="ln"> 8</span>         expanded = <span class="func">upce_to_upca</span>(digits)
+<span class="ln"> 9</span>         <span class="keyword">return</span> [expanded, digits] <span class="keyword">if</span> expanded <span class="keyword">else</span> []
+<span class="ln">10</span>
+<span class="ln">11</span>     <span class="comment"># 12位 → 直接用，加前缀0得到 ITF-14</span>
+<span class="ln">12</span>     <span class="keyword">if</span> len(digits) == <span class="num">12</span>:
+<span class="ln">13</span>         variants = [digits, <span class="string">"0"</span> + digits]
+<span class="ln">14</span>
+<span class="ln">15</span>     <span class="comment"># 13位 → EAN-13，去前缀0得到12位 UPC-A</span>
+<span class="ln">16</span>     <span class="keyword">if</span> len(digits) == <span class="num">13</span>:
+<span class="ln">17</span>         variants = [digits]
+<span class="ln">18</span>         <span class="keyword">if</span> digits.<span class="func">startswith</span>(<span class="string">"978"</span>):
+<span class="ln">19</span>             variants.<span class="func">append</span>(<span class="string">"0"</span> + digits[<span class="num">3</span>:<span class="num">12</span>])  <span class="comment"># ISBN-13 → ISBN-10 → UPC-A</span>
+<span class="ln">20</span>         <span class="keyword">if</span> digits.<span class="func">startswith</span>(<span class="string">"0"</span>):
+<span class="ln">21</span>             variants.<span class="func">append</span>(digits[<span class="num">1</span>:])      <span class="comment"># 去掉首0</span>
+<span class="ln">22</span>
+<span class="ln">23</span>     <span class="comment"># 14位 → ITF-14，去前导0找更短格式</span>
+<span class="ln">24</span>     <span class="keyword">if</span> len(digits) == <span class="num">14</span>:
+<span class="ln">25</span>         stripped = digits.<span class="func">lstrip</span>(<span class="string">"0"</span>)
+<span class="ln">26</span>         variants = [digits, stripped] <span class="keyword">if</span> stripped <span class="keyword">else</span> [digits]
+<span class="ln">27</span>
+<span class="ln">28</span>     <span class="keyword">return</span> _dedupe(variants)    <span class="comment"># 去重，保留顺序</span></code></pre>
+
+      <h3>main.py — /upc 端点</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">@app.get</span>(<span class="string">"/upc"</span>, response_model=UpcResponse)
+<span class="ln"> 2</span> <span class="keyword">async def</span> <span class="func">resolve_upc</span>(upc: str):
+<span class="ln"> 3</span>     raw = (upc <span class="keyword">or</span> <span class="string">""</span>).<span class="func">strip</span>()
+<span class="ln"> 4</span>     <span class="keyword">if not</span> raw:
+<span class="ln"> 5</span>         <span class="keyword">raise</span> HTTPException(status_code=<span class="num">400</span>, detail=<span class="string">"upc query param is required"</span>)
+<span class="ln"> 6</span>
+<span class="ln"> 7</span>     variants = <span class="func">normalize_upc</span>(raw)
+<span class="ln"> 8</span>     <span class="keyword">if not</span> variants:
+<span class="ln"> 9</span>         <span class="keyword">raise</span> HTTPException(status_code=<span class="num">400</span>, detail=<span class="string">"No numeric digits found"</span>)
+<span class="ln">10</span>
+<span class="ln">11</span>     asins: list[str] = []
+<span class="ln">12</span>     <span class="keyword">for</span> code <span class="keyword">in</span> variants:
+<span class="ln">13</span>         <span class="keyword">try</span>:
+<span class="ln">14</span>             products = <span class="keyword">await</span> _keepa.<span class="func">fetch_product_by_upc</span>(code)
+<span class="ln">15</span>             <span class="keyword">for</span> p <span class="keyword">in</span> products:
+<span class="ln">16</span>                 <span class="keyword">if</span> asin := p.<span class="func">get</span>(<span class="string">"asin"</span>):
+<span class="ln">17</span>                     asins.<span class="func">append</span>(asin)
+<span class="ln">18</span>         <span class="keyword">except</span> RuntimeError:               <span class="comment"># Keepa key 耗尽 → 优雅降级</span>
+<span class="ln">19</span>             <span class="keyword">break</span>
+<span class="ln">20</span>
+<span class="ln">21</span>     <span class="keyword">return</span> UpcResponse(input=raw, normalized=variants, asins=<span class="func">list</span>(dict.fromkeys(asins)))</code></pre>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ENDPOINT: ELIGIBILITY -->
+<div class="section" id="eligibility">
+  <div class="section-title">接口 3 & 4 /eligibility</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-get">GET</span>
+      <span class="endpoint-path">/eligibility/{asin}</span>
+    </div>
+    <div class="endpoint-body">
+
+      <h3>接口意义</h3>
+      <p>给定一个 ASIN，返回可转售合规性判断：是否满足 5 条业务规则，以及 ROI 预估。前端可渲染为逐条 CheckList。</p>
+
+      <h3>5条合规规则（按优先级依次检查）</h3>
+      <table class="rule-table">
+        <tr><th>#</th><th>字段</th><th>条件</th><th>含义</th></tr>
+        <tr><td>1</td><td><code>referral_fee_pct</code></td><td><code>&gt; 0</code></td><td>必须有有效佣金率（商品在 Amazon 有分类）</td></tr>
+        <tr><td>2</td><td><code>rank</code></td><td><code>rank ≤ 100,000 OR monthly_sold ≥ 100</code></td><td>有真实需求（排名不太差 OR 月销够高则豁免排名检查）</td></tr>
+        <tr><td>3</td><td><code>buybox</code></td><td><code>≥ $10</code></td><td>利润空间足够覆盖 FBA 费用</td></tr>
+        <tr><td>4</td><td><code>amazon_pct</code></td><td><code>≤ 80%</code></td><td>非 Amazon 垄断，有第三方卖家竞争空间</td></tr>
+        <tr><td>5</td><td><code>monthly_sold_min</code></td><td><code>null OR ≥ 100</code></td><td>月销 1~99 之间视为需求不稳定</td></tr>
+      </table>
+
+      <h3>ROI 公式</h3>
+<pre><code>payout  = buybox
+         − referral_fee   (buybox × referral_fee_pct / 100)
+         − fba_pick_pack  (fba_pick_pack_cents / 100)
+         − storage        ($0.50 / 月)
+
+roi     = 100 × (payout − supplier_cost) / supplier_cost</code></pre>
+
+      <h3>main.py — /eligibility/{asin}</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">async def</span> <span class="func">_build_eligibility_response</span>(asin: str) -> EligibilityResponse:
+<span class="ln"> 2</span>     record = <span class="keyword">await</span> <span class="func">_get_asin_record</span>(asin)
+<span class="ln"> 3</span>     <span class="keyword">if not</span> record:
+<span class="ln"> 4</span>         <span class="keyword">raise</span> HTTPException(status_code=<span class="num">404</span>, detail=<span class="string">f"ASIN {asin} not found"</span>)
+<span class="ln"> 5</span>
+<span class="ln"> 6</span>     <span class="comment"># 逐条计算每条规则的 pass_ / value / threshold</span>
+<span class="ln"> 7</span>     checks = {}
+<span class="ln"> 8</span>     checks[<span class="string">"referral_fee"</span>] = EligibilityCheck(
+<span class="ln"> 9</span>         pass_=(referral <span class="keyword">is not None and</span> referral > <span class="num">0</span>),
+<span class="ln">10</span>         value=referral, threshold=<span class="string">"> 0"</span>)
+<span class="ln">11</span>     rank_ok = sales_rank <span class="keyword">is not None and</span> sales_rank <= <span class="num">100_000</span>
+<span class="ln">12</span>     sold_ok = monthly_sold <span class="keyword">is not None and</span> monthly_sold >= <span class="num">100</span>
+<span class="ln">13</span>     checks[<span class="string">"demand"</span>] = EligibilityCheck(
+<span class="ln">14</span>         pass_=(rank_ok <span class="keyword">or</span> sold_ok),
+<span class="ln">15</span>         value={<span class="string">"sales_rank"</span>: sales_rank, <span class="string">"monthly_sold"</span>: monthly_sold},
+<span class="ln">16</span>         threshold=<span class="string">"rank ≤ 100k OR monthly_sold ≥ 100"</span>)
+<span class="ln">17</span>     checks[<span class="string">"buybox"</span>] = EligibilityCheck(pass_=(buybox >= <span class="num">10</span>), value=buybox, threshold=<span class="string">">= $10"</span>)
+<span class="ln">18</span>     checks[<span class="string">"amazon_pct"</span>] = EligibilityCheck(pass_=(amazon_pct <= <span class="num">80</span>), ...)
+<span class="ln">19</span>     checks[<span class="string">"monthly_sold_min"</span>] = EligibilityCheck(pass_=(monthly_sold <span class="keyword">is None or</span> monthly_sold >= <span class="num">100</span>), ...)
+<span class="ln">20</span>
+<span class="ln">21</span>     <span class="keyword">return</span> EligibilityResponse(asin=asin, ..., checks=checks,
+<span class="ln">22</span>                           computed_roi_pct=record[<span class="string">"computed_roi_pct"</span>])</code></pre>
+
+      <h3>eligibility.py — 核心逻辑</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">def</span> <span class="func">compute_payout</span>(buybox, referral_fee_pct, fba_pick_pack_cents) -> float:
+<span class="ln"> 2</span>     <span class="keyword">if</span> buybox <span class="keyword">is None or</span> buybox <= <span class="num">0</span>:
+<span class="ln"> 3</span>         <span class="keyword">return</span> <span class="num">0.0</span>
+<span class="ln"> 4</span>     referral = buybox * (referral_fee_pct / <span class="num">100</span>)
+<span class="ln"> 5</span>     fba = (fba_pick_pack_cents <span class="keyword">or</span> <span class="num">0</span>) / <span class="num">100</span>
+<span class="ln"> 6</span>     storage = <span class="num">0.50</span>
+<span class="ln"> 7</span>     <span class="keyword">return</span> buybox - referral - fba - storage
+<span class="ln"> 8</span>
+<span class="ln"> 9</span> <span class="keyword">def</span> <span class="func">compute_roi</span>(buybox, referral_pct, fba_cents, supplier_cost, n_items) -> Optional[float]:
+<span class="ln">10</span>     <span class="keyword">if</span> supplier_cost <span class="keyword">is None or</span> supplier_cost <= <span class="num">0</span>:
+<span class="ln">11</span>         <span class="keyword">return None</span>
+<span class="ln">12</span>     <span class="keyword">if</span> buybox <span class="keyword">is None or</span> buybox <= <span class="num">0</span>:      <span class="comment"># 无价格 → 无法计算 ROI</span>
+<span class="ln">13</span>         <span class="keyword">return None</span>
+<span class="ln">14</span>     payout = <span class="func">compute_payout</span>(buybox, referral_pct, fba_cents)
+<span class="ln">15</span>     items = max(n_items <span class="keyword">or</span> <span class="num">1</span>, <span class="num">1</span>)
+<span class="ln">16</span>     total_cost = supplier_cost * items            <span class="comment"># 多件装 × 件数</span>
+<span class="ln">17</span>     <span class="keyword">return</span> <span class="num">100</span> * (payout - total_cost) / total_cost
+<span class="ln">18</span>
+<span class="ln">19</span> <span class="keyword">def</span> <span class="func">check_eligibility</span>(referral_fee_pct, sales_rank, monthly_sold, buybox, amazon_pct):
+<span class="ln">20</span>     <span class="comment"># 5条规则依次检查，返回第一个失败原因</span>
+<span class="ln">21</span>     <span class="keyword">if</span> referral_fee_pct <span class="keyword">is None or</span> referral_fee_pct <= <span class="num">0</span>:
+<span class="ln">22</span>         <span class="keyword">return False</span>, <span class="string">"referral_fee_pct"</span>
+<span class="ln">23</span>     rank_ok = sales_rank <span class="keyword">is not None and</span> sales_rank <= <span class="num">100_000</span>
+<span class="ln">24</span>     sold_ok = monthly_sold <span class="keyword">is not None and</span> monthly_sold >= <span class="num">100</span>
+<span class="ln">25</span>     <span class="keyword">if not</span> (rank_ok <span class="keyword">or</span> sold_ok):
+<span class="ln">26</span>         <span class="keyword">return False</span>, <span class="string">"rank"</span>
+<span class="ln">27</span>     <span class="keyword">if</span> buybox <span class="keyword">is None or</span> buybox < <span class="num">10</span>:
+<span class="ln">28</span>         <span class="keyword">return False</span>, <span class="string">"buybox"</span>
+<span class="ln">29</span>     <span class="keyword">if</span> amazon_pct <span class="keyword">is None or</span> amazon_pct > <span class="num">80</span>:
+<span class="ln">30</span>         <span class="keyword">return False</span>, <span class="string">"amazon_pct"</span>
+<span class="ln">31</span>     <span class="keyword">if</span> monthly_sold <span class="keyword">is not None and</span> monthly_sold < <span class="num">100</span>:
+<span class="ln">32</span>         <span class="keyword">return False</span>, <span class="string">"monthly_sold"</span>
+<span class="ln">33</span>     <span class="keyword">return True</span>, <span class="bool">None</span></code></pre>
+
+      <h3>main.py — /eligibility/batch</h3>
+      <p>一次传入多个 ASIN（最多 ~100个），返回每个 ASIN 的 eligibility 结果。用于批量筛选、导出报告、AI 推荐后的二次确认。DB 中不存在的 ASIN 返回 <code>filter_failed=not_found</code>。</p>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ENDPOINT: ASK -->
+<div class="section" id="ask">
+  <div class="section-title">接口 5 /ask</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-post">POST</span>
+      <span class="endpoint-path">/ask</span>
+    </div>
+    <div class="endpoint-body">
+
+      <h3>接口意义</h3>
+      <p>将<strong>自然语言问题</strong>转化为 <strong>SQL 查询</strong>，执行后用 <strong>LLM</strong> 生成人类可读回答。用户无需懂 SQL，直接问 "How many eligible ASINs?" 即可得到答案。</p>
+
+      <h3>两阶段管道</h3>
+      <div class="flow">
+        <span class="flow-step">"How many eligible?"</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-ext">DeepSeek Step1<br>NL → SQL</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-ext">SQL 校验<br>SELECT-only</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-db">Execute<br>SQLite</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step flow-ext">DeepSeek Step2<br>格式化回答</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">answer + sql + rows</span>
+      </div>
+
+      <h3>安全防护（三层）</h3>
+      <table>
+        <tr><th>层级</th><th>机制</th><th>拦截内容</th></tr>
+        <tr><td>1</td><td>领域关键词过滤 <code>_is_out_of_scope()</code></td><td>weather, bitcoin, news 等域外问题直接拒绝，不调 LLM</td></tr>
+        <tr><td>2</td><td>SQL 白名单 <code>_validate_sql()</code></td><td>仅允许 SELECT，拦截 DROP/DELETE/injection</td></tr>
+        <tr><td>3</td><td>JSON 解析容错 <code>_parse_sql_response()</code></td><td>LLM 输出非 JSON 时不崩溃</td></tr>
+      </table>
+
+      <h3>deepseek.py — 核心代码</h3>
+<pre><code><span class="ln"> 1</span> <span class="comment"># ── Step 1: NL → SQL ─────────────────────────────────────────────</span>
+<span class="ln"> 2</span> _SQL_SYSTEM_PROMPT = (
+<span class="ln"> 3</span>     <span class="string">"You are a SQL query generator for Amazon FBA sourcing (Keepa Scout).\n"</span>
+<span class="ln"> 4</span>     <span class="string">"Table: asins(asin,title,brand,buybox,referral_fee_pct,\n"</span>
+<span class="ln"> 5</span>     <span class="string">"         sales_rank,monthly_sold,amazon_buybox_pct,\n"</span>
+<span class="ln"> 6</span>     <span class="string">"         supplier_cost,computed_roi_pct,eligible,filter_failed)\n"</span>
+<span class="ln"> 7</span>     <span class="string">"- Only output SQLite SELECT. No INSERT/UPDATE/DROP.\n"</span>
+<span class="ln"> 8</span>     <span class="string">"- If unanswerable: {\"out_of_scope\": true}\n"</span>
+<span class="ln"> 9</span>     <span class="string">"Output format (JSON only, no markdown):\n"</span>
+<span class="ln">10</span>     <span class="string">'{"sql": "<SELECT or null>", "out_of_scope": false, "resolved_asin": null, ...}'</span>
+<span class="ln">11</span> )
+<span class="ln">12</span>
+<span class="ln">13</span> <span class="keyword">async def</span> <span class="func">_generate_sql</span>(question, context_asin, history) -> dict:
+<span class="ln">14</span>     messages = [{<span class="string">"role"</span>: <span class="string">"system"</span>, <span class="string">"content"</span>: _SQL_SYSTEM_PROMPT}]
+<span class="ln">15</span>     <span class="keyword">if</span> history:
+<span class="ln">16</span>         messages.<span class="func">extend</span>(history)            <span class="comment"># 带上历史（用于 chat）</span>
+<span class="ln">17</span>     messages.<span class="func">append</span>({<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: question})
+<span class="ln">18</span>     payload = {<span class="string">"model"</span>: <span class="string">"deepseek-chat"</span>, <span class="string">"messages"</span>: messages,
+<span class="ln">19</span>                 <span class="string">"temperature"</span>: <span class="num">0.1</span>, <span class="string">"max_tokens"</span>: <span class="num">512</span>}
+<span class="ln">20</span>     resp = <span class="keyword">await</span> httpx.<span class="func">post</span>(DEEPSEEK_BASE, headers=..., json=payload)
+<span class="ln">21</span>     content = resp.json()[<span class="string">"choices"</span>][<span class="num">0</span>][<span class="string">"message"</span>][<span class="string">"content"</span>].<span class="func">strip</span>()
+<span class="ln">22</span>     <span class="keyword">return</span> _parse_sql_response(content, context_asin)
+<span class="ln">23</span>
+<span class="ln">24</span> <span class="comment"># ── SQL 白名单校验 ───────────────────────────────────────────────</span>
+<span class="ln">25</span> <span class="keyword">def</span> <span class="func">_validate_sql</span>(sql: str) -> Optional[str]:
+<span class="ln">26</span>     <span class="keyword">if not</span> sql.<span class="func">strip</span>():
+<span class="ln">27</span>         <span class="keyword">return</span> <span class="string">"Empty SQL"</span>
+<span class="ln">28</span>     <span class="keyword">if not</span> sql.strip().<span class="func">lower</span>().<span class="func">startswith</span>(<span class="string">"select"</span>):
+<span class="ln">29</span>         <span class="keyword">return</span> <span class="string">"Only SELECT allowed"</span>
+<span class="ln">30</span>     forbidden = [<span class="string">"drop"</span>, <span class="string">"delete"</span>, <span class="string">"insert"</span>, <span class="string">"update"</span>, <span class="string">"alter"</span>, <span class="string">"create"</span>, <span class="string">"truncate"</span>, <span class="string">"--"</span>]
+<span class="ln">31</span>     <span class="keyword">if</span> any(kw <span class="keyword">in</span> sql.strip().<span class="func">lower</span>() <span class="keyword">for</span> kw <span class="keyword">in</span> forbidden):
+<span class="ln">32</span>         <span class="keyword">return</span> <span class="string">"Forbidden keyword"</span>
+<span class="ln">33</span>     <span class="keyword">return None</span>      <span class="comment"># None = 校验通过</span>
+<span class="ln">34</span>
+<span class="ln">35</span> <span class="comment"># ── Step 2: 格式化回答 ─────────────────────────────────────────</span>
+<span class="ln">36</span> <span class="keyword">async def</span> <span class="func">_format_answer</span>(question, sql, rows, error, context_asin, intent) -> str:
+<span class="ln">37</span>     <span class="comment"># 0 行结果：硬编码 fallback（避免 LLM 拒绝 0 行问题）</span>
+<span class="ln">38</span>     <span class="keyword">if not</span> rows:
+<span class="ln">39</span>         <span class="keyword">if</span> error:
+<span class="ln">40</span>             <span class="keyword">return</span> f<span class="string">"Query failed ({error})."</span>
+<span class="ln">41</span>         <span class="keyword">return</span> _fallback_zero_rows(question, sql)
+<span class="ln">42</span>
+<span class="ln">43</span>     <span class="comment"># 有数据 → 调 DeepSeek 格式化</span>
+<span class="ln">44</span>     system_content = (
+<span class="ln">45</span>         <span class="string">"You are an analyst. SQL returned real data below.\n"</span>
+<span class="ln">46</span>         <span class="string">"Answer based on the rows. Include specific numbers. Do NOT say you cannot answer."</span>
+<span class="ln">47</span>     )
+<span class="ln">48</span>     payload = {<span class="string">"model"</span>: <span class="string">"deepseek-chat"</span>, <span class="string">"messages"</span>: [...], <span class="string">"temperature"</span>: <span class="num">0.3</span>}
+<span class="ln">49</span>     resp = <span class="keyword">await</span> httpx.<span class="func">post</span>(DEEPSEEK_BASE, headers=..., json=payload)
+<span class="ln">50</span>     <span class="keyword">return</span> resp.json()[<span class="string">"choices"</span>][<span class="num">0</span>][<span class="string">"message"</span>][<span class="string">"content"</span>].<span class="func">strip</span>()
+<span class="ln">51</span>
+<span class="ln">52</span> <span class="comment"># 零结果硬编码 fallback（DeepSeek 倾向拒绝 0 行问题）</span>
+<span class="ln">53</span> <span class="keyword">def</span> <span class="func">_fallback_zero_rows</span>(question, sql) -> str:
+<span class="ln">54</span>     q = question.<span class="func">lower</span>(); sql_up = sql.<span class="func">upper</span>()
+<span class="ln">55</span>     <span class="keyword">if</span> <span class="string">"COUNT"</span> <span class="keyword">in</span> sql_up <span class="keyword">and</span> <span class="string">"ELIGIBLE"</span> <span class="keyword">in</span> sql_up:
+<span class="ln">56</span>         <span class="keyword">return</span> <span class="string">"There are 0 ASINs in your catalog that match that criteria."</span>
+<span class="ln">57</span>     <span class="keyword">if</span> q.<span class="func">startswith</span>(<span class="string">"why"</span>):
+<span class="ln">58</span>         <span class="keyword">return</span> <span class="string">"No matching ASIN found."</span>
+<span class="ln">59</span>     ...</code></pre>
+
+      <h3>keepa_client.py — 多 Key 轮换</h3>
+<pre><code><span class="ln"> 1</span> <span class="comment"># 按配额稳定性排序，优先用稳定 key</span>
+<span class="ln"> 2</span> _KEY_ORDER = [<span class="num">1</span>, <span class="num">0</span>]           <span class="comment"># key1≈300 tokens > key0≈200</span>
+<span class="ln"> 3</span>
+<span class="ln"> 4</span> <span class="keyword">async def</span> <span class="func">_request</span>(self, params: dict) -> dict:
+<span class="ln"> 5</span>     params[<span class="string">"key"</span>] = self._key
+<span class="ln"> 6</span>     <span class="keyword">async with</span> httpx.<span class="func">AsyncClient</span>(timeout=<span class="num">60.0</span>) <span class="keyword">as</span> client:
+<span class="ln"> 7</span>         <span class="keyword">for</span> order_idx <span class="keyword">in</span> _KEY_ORDER:
+<span class="ln"> 8</span>             self._idx = order_idx
+<span class="ln"> 9</span>             <span class="keyword">try</span>:
+<span class="ln">10</span>                 resp = <span class="keyword">await</span> client.<span class="func">get</span>(f<span class="string">"{KEEPA_BASE}/product"</span>, params=params)
+<span class="ln">11</span>                 <span class="keyword">if</span> resp.status_code == <span class="num">200</span>:
+<span class="ln">12</span>                     self._tokens_used += body[<span class="string">"tokensConsumed"</span>]
+<span class="ln">13</span>                     <span class="keyword">return</span> body
+<span class="ln">14</span>                 <span class="keyword">elif</span> resp.status_code <span class="keyword">in</span> (<span class="num">402</span>, <span class="num">429</span>):
+<span class="ln">15</span>                     <span class="keyword">continue</span>            <span class="comment"># 切换到下一个 key</span>
+<span class="ln">16</span>             <span class="keyword">except</span> httpx.<span class="func">HTTPStatusError</span> <span class="keyword">as</span> e:
+<span class="ln">17</span>                 <span class="keyword">if</span> e.response.status_code <span class="keyword">in</span> (<span class="num">402</span>, <span class="num">429</span>):
+<span class="ln">18</span>                     <span class="keyword">continue</span>
+<span class="ln">19</span>                 <span class="keyword">raise</span>
+<span class="ln">20</span>     <span class="keyword">raise</span> RuntimeError(<span class="string">"All Keepa keys exhausted"</span>)</code></pre>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ENDPOINT: CHAT -->
+<div class="section" id="chat">
+  <div class="section-title">接口 6 /chat</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method method-post">POST</span>
+      <span class="endpoint-path">/chat</span>
+    </div>
+    <div class="endpoint-body">
+
+      <h3>接口意义</h3>
+      <p>支持<strong>多轮对话</strong>的会话接口，在 <code>/ask</code> 基础上增加了对话历史、ASIN 代词解析、主题重置和偏好持久化。</p>
+
+      <h3>session_state 结构</h3>
+<pre><code>{
+  <span class="string">"history"</span>: [                <span class="comment"># 最近 20 轮（保持上下文精简）</span>
+    {<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: <span class="string">"Show eligible ASINs"</span>},
+    {<span class="string">"role"</span>: <span class="string">"assistant"</span>, <span class="string">"content"</span>: <span class="string">"There are 19 eligible..."</span>},
+  ],
+  <span class="string">"resolved_asin"</span>: <span class="string">"B00HEON30Y"</span>,   <span class="comment"># 当前话题中的 ASIN（用于代词解析）</span>
+  <span class="string">"intent"</span>: {<span class="string">"intent"</span>: <span class="string">"list_eligible"</span>, <span class="string">"topic_reset"</span>: <span class="bool">False</span>},
+  <span class="string">"last_result_asins"</span>: [<span class="string">"B0D9C71HG4"</span>, <span class="string">"B00HEON30Y"</span>, ...],  <span class="comment"># 最近查询结果</span>
+}</code></pre>
+
+      <h3>main.py — /chat 端点</h3>
+<pre><code><span class="ln"> 1</span> <span class="keyword">async def</span> <span class="func">chat</span>(body: ChatRequest):
+<span class="ln"> 2</span>     session_id = body.session_id
+<span class="ln"> 3</span>
+<span class="ln"> 4</span>     <span class="comment"># 1. 加载或创建 session（SQLite 持久化）</span>
+<span class="ln"> 5</span>     async <span class="keyword">with</span> async_session_maker() <span class="keyword">as</span> session:
+<span class="ln"> 6</span>         result = <span class="keyword">await</span> session.<span class="func">execute</span>(
+<span class="ln"> 7</span>             select(ChatSession).<span class="func">where</span>(ChatSession.session_id == session_id))
+<span class="ln"> 8</span>         chat_rec = result.<span class="func">scalar_one_or_none</span>()
+<span class="ln"> 9</span>         <span class="keyword">if</span> chat_rec:
+<span class="ln">10</span>             session_state = chat_rec.session_state <span class="keyword">or</span> {}
+<span class="ln">11</span>         <span class="keyword">else</span>:
+<span class="ln">12</span>             session_state = {<span class="string">"history"</span>: [], <span class="string">"resolved_asin"</span>: <span class="bool">None</span>, <span class="string">"intent"</span>: <span class="bool">None</span>}
+<span class="ln">13</span>             chat_rec = ChatSession(session_id=session_id, session_state=session_state)
+<span class="ln">14</span>             session.<span class="func">add</span>(chat_rec)
+<span class="ln">15</span>
+<span class="ln">16</span>         history = session_state.<span class="func">get</span>(<span class="string">"history"</span>, [])
+<span class="ln">17</span>         history.<span class="func">append</span>({<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: body.message})
+<span class="ln">18</span>         session_state[<span class="string">"history"</span>] = history[<span class="num">-20</span>:]   <span class="comment"># 只保留最近 20 轮</span>
+<span class="ln">19</span>
+<span class="ln">20</span>         <span class="comment"># 2. DeepSeek 生成 SQL（带 context_asin 和历史）</span>
+<span class="ln">21</span>         context_asin = session_state.<span class="func">get</span>(<span class="string">"resolved_asin"</span>)
+<span class="ln">22</span>         answer_result = <span class="keyword">await</span> <span class="func">ask_deepseek</span>(
+<span class="ln">23</span>             body.message,
+<span class="ln">24</span>             context_asin=context_asin,
+<span class="ln">25</span>             history=history[<span class="num">-10</span>:]     <span class="comment"># 最近 10 轮传给 LLM（控制 token）</span>
+<span class="ln">26</span>         )
+<span class="ln">27</span>
+<span class="ln">28</span>         <span class="comment"># 3. 更新 session_state 并持久化</span>
+<span class="ln">29</span>         history.<span class="func">append</span>({<span class="string">"role"</span>: <span class="string">"assistant"</span>, <span class="string">"content"</span>: answer_result[<span class="string">"answer"</span>]})
+<span class="ln">30</span>         session_state[<span class="string">"history"</span>] = history[<span class="num">-20</span>:]
+<span class="ln">31</span>         <span class="keyword">if</span> resolved_asin := answer_result.<span class="func">get</span>(<span class="string">"resolved_asin"</span>):
+<span class="ln">32</span>             session_state[<span class="string">"resolved_asin"</span>] = resolved_asin
+<span class="ln">33</span>
+<span class="ln">34</span>         chat_rec.session_state = session_state
+<span class="ln">35</span>         <span class="keyword">await</span> session.<span class="func">commit</span>()
+<span class="ln">36</span>
+<span class="ln">37</span>         <span class="keyword">return</span> ChatResponse(answer=..., session_state=session_state,
+<span class="ln">38</span>                           intent=IntentInfo(...))</code></pre>
+
+      <h3>intent 字段含义</h3>
+      <table>
+        <tr><th>intent 值</th><th>场景</th></tr>
+        <tr><td><code>list_eligible</code></td><td>列出符合条件的 ASIN</td></tr>
+        <tr><td><code>filter</code></td><td>在已有结果上追加 filter</td></tr>
+        <tr><td><code>explain</code></td><td>解释某个 ASIN 不符合的原因</td></tr>
+        <tr><td><code>compare</code></td><td>对比多个 ASIN</td></tr>
+        <tr><td><code>None</code></td><td>DeepSeek 未识别出意图</td></tr>
+      </table>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ HIGHLIGHTS -->
+<div class="section" id="highlights">
+  <div class="section-title">代码亮点</div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 多 Key 轮换 + Token 感知调度</h4>
+    <p><code>KeepaClient._KEY_ORDER = [1, 0]</code> 按配额稳定性排序，优先用 <code>key1</code>（≈300 tokens），耗尽后切 <code>key0</code>（≈200 tokens）。结合 <code>tokensUsed</code> 计数，实现精细化配额管理。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 双层 SQL 安全防护</h4>
+    <p>即使 DeepSeek 被 prompt injection 攻击诱导生成危险 SQL，<code>_validate_sql()</code> 仍会在执行前拦截（禁止 DROP/DELETE/injection），形成双重安全网。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 stats.avg[3] 作为稳定排名来源</h4>
+    <p>Keepa 的 <code>stats.avg[3]</code> 是 90 天平均排名，比瞬时 <code>current[2]</code> 稳定得多，避免商品缺货/促销时的异常排名导致误判。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 Amazon BuyBox 占比从历史推算</h4>
+    <p>没有直接字段，用 <code>buyBoxSellerIdHistory</code>（时间戳+卖家ID交替排列），<code>seller_ids = history[1::2]</code> 统计 Amazon seller ID 出现比例，精度高且实时。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 零结果时硬编码 fallback</h4>
+    <p>DeepSeek 等安全调校的 LLM 对"返回 0 条结果"的 SQL 倾向于拒绝回答，用关键词匹配在 <code>_fallback_zero_rows()</code> 中直接生成合理回答，节省 LLM token 消耗。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 全链路异步</h4>
+    <p>从 FastAPI → Keepa HTTP → DeepSeek HTTP → SQLite，全部用 <code>async/await</code>，ETL 批量拉 30 ASIN（2批）约 12 秒，充分利用 I/O 并发。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 复合索引优化</h4>
+    <p><code>idx_eligible_roi</code>（eligible + computed_roi_pct）专为 <code>WHERE eligible=1 ORDER BY roi DESC</code> 设计，覆盖最常见查询路径，避免回表。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 Lifespan 上下文管理器</h4>
+    <p>用 <code>@asynccontextmanager lifespan()</code> 管理启动（init_db + run_etl）和关闭（engine.dispose），启动即触发 ETL，无需单独脚本。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 INSERT OR REPLACE 幂等写入</h4>
+    <p>ETL 多次启动不会重复数据，只更新已有记录，容器重建后数据自动重建。</p>
+  </div>
+
+  <div class="hl hl-purple">
+    <h4>🔑 SQLAlchemy 2.0 MappedColumn</h4>
+    <p>使用 <code>Mapped[T]</code> + <code>mapped_column()</code> 新语法，类型安全且 IDE 友好。</p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ OPTIMIZATIONS -->
+<div class="section" id="optimizations">
+  <div class="section-title">功能完善 & 性能优化</div>
+
+  <h2>功能完善</h2>
+
+  <div class="hl hl-warn">
+    <h4>⚠️ /upc：偏好持久化（user_constraints）未生效</h4>
+    <p>DeepSeek 目前没有将用户偏好（如 "My budget is $20"）写入 <code>session_state["user_constraints"]</code>。需要在 <code>_SQL_SYSTEM_PROMPT</code> 中更明确引导 DeepSeek 输出 <code>user_constraints</code> JSON 字段，并在 <code>/chat</code> 端点中解析该字段写入 session。</p>
+<pre><code><span class="comment"># 在 _SQL_SYSTEM_PROMPT 中补充：</span>
+<span class="string">"- If user mentions budget, brand preference, category preference,\n"</span>
+<span class="string">"  add to JSON: {\"user_constraints\": {\"budget\": 20, \"brand\": \"Schneider\"}}\n"</span></code></pre>
+  </div>
+
+  <div class="hl hl-warn">
+    <h4>⚠️ number_of_items 未写入 DB</h4>
+    <p><code>parse_product</code> 解析了 <code>number_of_items</code>（用于识别 6-pack 等多件装），但 <code>build_record()</code> 的 INSERT 语句没有包含该字段，导致多件装 ROI 计算依赖的 <code>n_items</code> 始终为 None。</p>
+<pre><code><span class="comment"># etl.py upsert_asins() 中补上 number_of_items：</span>
+INSERT OR REPLACE INTO asins
+  (asin, ..., number_of_items, ...)   <span class="comment"># ← 添加此列</span>
+VALUES
+  (:asin, ..., :number_of_items, ...)</code></pre>
+  </div>
+
+  <div class="hl hl-warn">
+    <h4>⚠️ monthly_sold 全为 None，建议加 ETL warning</h4>
+    <p>当前所有商品的 <code>monthlySoldAverage</code> 均为 None（Keepa 对部分品类不提供此数据），导致规则2的月销豁免失效。建议在 ETL 阶段对 <code>monthly_sold is None</code> 的商品打 warning 日志，并考虑从 <code>stats.avg</code> 或历史价格数据推算需求。</p>
+  </div>
+
+  <div class="hl hl-warn">
+    <h4>⚠️ /upc：只返回第一个成功变体的结果</h4>
+    <p>当前遍历 variants 时，遇到 <code>RuntimeError</code>（key 耗尽）直接 <code>break</code>，已成功的变体结果仍在 <code>asins</code> 中。但若 Keepa 在第一个变体就耗尽，后续变体不会尝试。改为：先收集所有成功变体，再统一 break。</p>
+  </div>
+
+  <h2>性能优化</h2>
+
+  <div class="hl hl-accent">
+    <h4>🔧 /eligibility/batch：改为单次 WHERE IN 查询</h4>
+    <p>当前逐条查询（O(n) 次 DB 往返），改为一次 <code>WHERE asin IN (...)</code> 批量查，大幅减少网络 RTT。</p>
+<pre><code><span class="comment"># 优化前：n 次 DB 往返</span>
+<span class="keyword">for</span> asin <span class="keyword">in</span> body.asins:
+    rec = <span class="keyword">await</span> _get_asin_record(asin)   <span class="comment"># O(n) 次查询</span>
+
+<span class="comment"># 优化后：1 次批量查询</span>
+result = <span class="keyword">await</span> session.<span class="func">execute</span>(
+    select(Asin).<span class="func">where</span>(Asin.asin.<span class="func">in_</span>(body.asins))
+)
+records = {row.asin: row <span class="keyword">for</span> row <span class="keyword">in</span> result.<span class="func">scalars</span>().<span class="func">all</span>()}
+<span class="keyword">for</span> asin <span class="keyword">in</span> body.asins:
+    rec = records.<span class="func">get</span>(asin)     <span class="comment"># O(1) 字典查找</span></code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 /upc：并行调 Keepa（asyncio.gather）</h4>
+    <p>多个 UPC 变体应并行调用，而非串行等待，降低总延迟。</p>
+<pre><code><span class="keyword">import</span> asyncio
+<span class="keyword">import</span> httpx   <span class="comment"># RuntimeError 会被 gather 捕获</span>
+
+results = <span class="keyword">await</span> asyncio.<span class="func">gather</span>(
+    *[_keepa.<span class="func">fetch_product_by_upc</span>(code) <span class="keyword">for</span> code <span class="keyword">in</span> variants],
+    return_exceptions=<span class="bool">True</span>
+)
+<span class="keyword">for</span> products <span class="keyword">in</span> results:
+    <span class="keyword">if</span> isinstance(products, Exception):
+        <span class="keyword">continue</span>   <span class="comment"># 跳过失败的变体</span>
+    <span class="keyword">for</span> p <span class="keyword">in</span> products:
+        <span class="keyword">if</span> asin := p.<span class="func">get</span>(<span class="string">"asin"</span>):
+            asins.<span class="func">append</span>(asin)</code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 DeepSeek：HTTP Client 改为单例</h4>
+    <p>当前每次 LLM 调用都创建新的 <code>httpx.AsyncClient(timeout=30.0)</code>，改为模块级单例，节省连接建立开销。</p>
+<pre><code><span class="comment"># deepseek.py</span>
+_http_client: httpx.AsyncClient | <span class="bool">None</span> = <span class="bool">None</span>
+
+<span class="keyword">async def</span> <span class="func">_get_client</span>() -> httpx.AsyncClient:
+    <span class="keyword">global</span> _http_client
+    <span class="keyword">if</span> _http_client <span class="keyword">is None</span>:
+        _http_client = httpx.<span class="func">AsyncClient</span>(timeout=<span class="num">30.0</span>)
+    <span class="keyword">return</span> _http_client
+
+<span class="comment"># 用法：</span>
+client = <span class="keyword">await</span> <span class="func">_get_client</span>()
+resp = <span class="keyword">await</span> client.<span class="func">post</span>(DEEPSEEK_BASE, ...)</code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 _calc_amazon_pct：只取最近 N 条估算</h4>
+    <p><code>buyBoxSellerIdHistory</code> 最多有 5000+ 条记录（全量计算），改为只取最近 500 条估算，精度损失极小但性能提升显著。</p>
+<pre><code><span class="comment"># keepa_client.py</span>
+<span class="keyword">def</span> <span class="func">_calc_amazon_pct</span>(self, p: dict) -> Optional[float]:
+    history = p.<span class="func">get</span>(<span class="string">"buyBoxSellerIdHistory"</span>, [])
+    <span class="keyword">if</span> len(history) < <span class="num">4</span>:
+        <span class="keyword">return None</span>
+    <span class="comment"># 只取最近 500 个卖家记录（约 1000 个元素）</span>
+    recent = history[<span class="num">-1000</span>:]
+    seller_ids = recent[<span class="num">1</span>::<span class="num">2</span>]
+    amazon_count = <span class="func">sum</span>(<span class="num">1</span> <span class="keyword">for</span> sid <span class="keyword">in</span> seller_ids <span class="keyword">if</span> sid == AMAZON_SELLER_ID)
+    <span class="keyword">return</span> <span class="func">round</span>(<span class="num">100.0</span> * amazon_count / len(seller_ids), <span class="num">2</span>)</code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 Keepa 429 后主动等待回充</h4>
+    <p>当前遇到 429 直接跳过 key，如果两个 key 都耗尽直接放弃。改为：读取 Keepa 返回的 <code>refillIn</code> 毫秒数，等待后重试（最多重试 2 次）。</p>
+<pre><code><span class="comment"># keepa_client.py _request() 中</span>
+<span class="keyword">elif</span> resp.status_code == <span class="num">429</span>:
+    refill_in = body.<span class="func">get</span>(<span class="string">"refillIn"</span>, <span class="num">0</span>)
+    <span class="keyword">if</span> refill_in > <span class="num">0</span> <span class="keyword">and</span> refill_in < <span class="num">120_000</span>:  <span class="comment"># 最多等 2 分钟</span>
+        <span class="keyword">await</span> asyncio.<span class="func">sleep</span>(refill_in / <span class="num">1000</span> + <span class="num">1</span>)   <span class="comment"># 等待回充 + 1s buffer</span>
+        <span class="keyword">continue</span>
+    <span class="keyword">continue</span></code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 ETL：并发控制（asyncio.Semaphore）</h4>
+    <p>当前 30 ASIN 分 2 批串行拉取，加 Semaphore 控制并发数（保持 token 消耗平稳），可以在更短时间内完成。</p>
+<pre><code><span class="keyword">import</span> asyncio
+
+<span class="keyword">async def</span> <span class="func">fetch_asins_concurrent</span>(client, asins, max_concurrent=<span class="num">3</span>):
+    sem = asyncio.<span class="func">Semaphore</span>(max_concurrent)
+    <span class="keyword">async def</span> <span class="func">fetch_one</span>(batch):
+        <span class="keyword">async with</span> sem:
+            <span class="keyword">return await</span> client.<span class="func">fetch_products_by_asins</span>(batch)
+    results = <span class="keyword">await</span> asyncio.<span class="func">gather</span>(
+        *[<span class="func">fetch_one</span>(asins[i:i+BATCH_SIZE])
+          <span class="keyword">for</span> i <span class="keyword">in</span> range(<span class="num">0</span>, len(asins), BATCH_SIZE)]
+    )
+    <span class="keyword">return</span> [p <span class="keyword">for</span> batch_results <span class="keyword">in</span> results <span class="keyword">for</span> p <span class="keyword">in</span> batch_results]</code></pre>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 /health：增加 Keepa token 余量</h4>
+    <p><code>/health</code> 可以读取 <code>KeepaClient</code> 实例的 <code>tokens_left</code>（结合最近一次 API 返回的 <code>tokensLeft</code>），返回给前端提示用户配额状态。</p>
+  </div>
+
+  <div class="hl hl-accent">
+    <h4>🔧 CORS 配置改为环境变量</h4>
+    <p>当前 <code>allow_origins=["*"]</code> 过于宽松，生产环境建议改为白名单。</p>
+<pre><code>ALLOWED_ORIGINS = os.getenv(<span class="string">"ALLOWED_ORIGINS"</span>, <span class="string">"*"</span>).<span class="func">split</span>(<span class="string">","</span>)
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, ...)</code></pre>
+  </div>
+
+</div>
+
+<hr>
+<p style="color:var(--text-muted);font-size:0.85rem;text-align:center;">
+  Keepa Scout — 项目分析报告 · 2026-05-13
+</p>
+
+</body>
+</html>

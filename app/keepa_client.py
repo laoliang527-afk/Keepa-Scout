@@ -75,12 +75,19 @@ class KeepaClient:
                     elif resp.status_code in (402, 429):
                         print(f"  [keepa] key_idx={order_idx} returned {resp.status_code}, skipping to next key")
                         continue
+                    elif resp.status_code == 422:
+                        # Invalid ASIN/UPC/code format — return empty result for this key
+                        print(f"  [keepa] key_idx={order_idx} returned 422 (invalid code), skipping to next key")
+                        continue
                     else:
                         resp.raise_for_status()
                 except httpx.HTTPStatusError as e:
                     print(f"  [keepa] HTTPError key_idx={order_idx} status={e.response.status_code}")
                     if e.response.status_code in (402, 429):
                         print(f"  [keepa] key_idx={order_idx} returned {e.response.status_code}, skipping to next key")
+                        continue
+                    elif e.response.status_code == 422:
+                        print(f"  [keepa] key_idx={order_idx} returned 422 (invalid code), skipping to next key")
                         continue
                     raise
         raise RuntimeError("All Keepa keys exhausted")
@@ -130,6 +137,11 @@ class KeepaClient:
         Parse a Keepa product dict into normalized fields.
         All prices in dollars (Keepa returns cents).
         -1 or missing values become None.
+
+        Data source strategy:
+        - BuyBox price  → stats.buyBoxPrice (most reliable), fallback to current[0]
+        - Sales rank    → stats.avg[3] (90-day average, most stable), fallback to current[2]
+        The top-level current[] is often stale or -1; always prefer the stats snapshot.
         """
         result = {}
 
@@ -140,14 +152,23 @@ class KeepaClient:
         # numberOfItems (e.g. "6-pack" has 6)
         result["number_of_items"] = p.get("numberOfItems") or p.get("packageQuantity")
 
-        # BuyBox price (cents → dollars)
-        current = p.get("current", [])
-        buybox_cents = _safe_idx(current, STAT_BUYBOX_PRICE)
+        # ── BuyBox price ──────────────────────────────────────────────
+        # stats.buyBoxPrice is the most reliable source (directly from stats snapshot).
+        # Fall back to top-level current[0] if stats.buyBoxPrice is missing.
+        stats_data = p.get("stats", {}) or {}
+        buybox_cents = stats_data.get("buyBoxPrice")
+        if buybox_cents is None or buybox_cents < 0:
+            buybox_cents = _safe_idx(p.get("current") or [], 0)
         result["buybox"] = _cents_to_dollars(buybox_cents)
 
-        # Sales rank
-        rank_cents = _safe_idx(current, STAT_SALES_RANK)
-        result["sales_rank"] = None if (rank_cents is None or rank_cents < 0) else int(rank_cents)
+        # ── Sales rank ──────────────────────────────────────────────
+        # stats.avg[3] = 90-day average sales rank — most stable source.
+        # Fall back to top-level current[2] if unavailable.
+        stats_avg = stats_data.get("avg") or []
+        sales_rank_cents = _safe_idx(stats_avg, 3)
+        if sales_rank_cents is None or sales_rank_cents < 0:
+            sales_rank_cents = _safe_idx(p.get("current") or [], 2)
+        result["sales_rank"] = int(sales_rank_cents) if sales_rank_cents is not None else None
 
         # Referral fee %
         result["referral_fee_pct"] = p.get("referralFeePercentage")
@@ -161,7 +182,6 @@ class KeepaClient:
             result["fba_pick_pack_cents"] = None
 
         # Monthly sold (from stats)
-        stats_data = p.get("stats", {})
         result["monthly_sold"] = stats_data.get("monthlySoldAverage")
         if result["monthly_sold"] == -1:
             result["monthly_sold"] = None

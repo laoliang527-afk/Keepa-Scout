@@ -99,13 +99,21 @@ async def resolve_upc(upc: str):
         raise HTTPException(status_code=400, detail="No numeric digits found in input")
 
     asins: list[str] = []
+    errors: list[str] = []
     for code in variants:
-        products = await _keepa.fetch_product_by_upc(code)
-        for p in products:
-            if asin := p.get("asin"):
-                asins.append(asin)
+        try:
+            products = await _keepa.fetch_product_by_upc(code)
+            for p in products:
+                if asin := p.get("asin"):
+                    asins.append(asin)
+        except RuntimeError:
+            errors.append(f"All Keepa keys exhausted after trying '{code}'")
+            break
+        except Exception as e:
+            errors.append(f"Keepa error for '{code}': {e}")
+            continue
 
-    return UpcResponse(input=raw, normalized=variants, asins=list(dict.fromkeys(asins)))
+    return UpcResponse(input=raw, normalized=variants, asins=list(dict.fromkeys(asins)), errors=errors)
 
 
 # ── Eligibility ───────────────────────────────────────────────────────────────

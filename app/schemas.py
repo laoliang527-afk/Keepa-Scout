@@ -10,6 +10,7 @@ class UpcResponse(BaseModel):
     input: str
     normalized: List[str]
     asins: List[str]
+    errors: List[str] = Field(default_factory=list)
 
 
 # ── Eligibility ────────────────────────────────────────────────────────────────

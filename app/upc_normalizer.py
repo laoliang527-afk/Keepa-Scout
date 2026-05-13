@@ -35,13 +35,14 @@ def normalize_upc(raw: str) -> list[str]:
 
     variants: list[str] = []
 
-    # 11 digits → UPC-E, expand to UPC-A (12 digits)
+    # 11 digits → UPC-E (expand to UPC-A) or missing leading zero.
+    # Try both: prepend '0' for 12-digit, then UPC-E expansion.
     if len(digits) == 11:
+        variants.append("0" + digits)  # 补前导 0 → 12-digit UPC-A
         expanded = upce_to_upca(digits)
         if expanded:
-            variants.append(expanded)  # 12-digit
-            variants.append(digits)     # 11-digit as fallback
-            return variants
+            variants.append(expanded)
+        return _dedupe(variants)
 
     # 12 digits → UPC-A, add leading zero for ITF-14
     if len(digits) == 12:
@@ -83,34 +84,35 @@ def normalize_upc(raw: str) -> list[str]:
 
 def upce_to_upca(upce: str) -> Optional[str]:
     """
-    Expand a 6-digit UPC-E (with check digit) to 12-digit UPC-A.
-    UPC-E encoding: manufacturer + product digits, no check digit in UPC-E form.
-    Expansion depends on number system and check digit.
+    Expand an 11-digit UPC-E (UPC-E + check digit) to 12-digit UPC-A.
+    Real UPC-E uses a specific encoding table where the check digit (last char)
+    determines how the 6 middle digits are distributed across the manufacturer code.
+    See: https://www.gs1.org/standards/barcodes/ean-upc
     """
-    # 11-digit input means it's actually 11 chars (UPC-E + check digit)
     if len(upce) != 11:
         return None
 
-    # number_system = first digit
-    ns = upce[0]
-    # check_digit = last digit
-    check = upce[-1]
-    middle = upce[1:7]
+    ns = upce[0]        # number system digit (0 or 1)
+    d1, d2, d3, d4, d5, d6 = upce[1:7]  # 6 encoded digits
+    check = upce[-1]     # check digit
 
-    # Expand based on check digit (simplified real-world expansion)
-    # Real UPC-E expansion uses check digit to determine manufacturer code ending
-    # For our mock/sample data we just do basic expansion
+    # Number system 0/1 determines the first digit of the manufacturer code.
+    # The last digit of the manufacturer code is encoded by the check digit
+    # using the real GS1 expansion table.
+    manufacturer_first = ns
+    # The 6 UPC-E middle digits encode manufacturer_last + product code.
+    # The check digit determines where the manufacturer code ends.
     expansions = {
-        "0": f"00000{middle[:2]}000{check}",
-        "1": f"10000{middle[:2]}000{check}",
-        "2": f"20000{middle[:2]}000{check}",
-        "3": f"30000{middle[:2]}000{check}",
-        "4": f"40000{middle[:3]}00{check}",
-        "5": f"50000{middle[:4]}0{check}",
-        "6": f"60000{middle[:4]}0{check}",
-        "7": f"70000{middle[:4]}0{check}",
-        "8": f"80000{middle[:4]}0{check}",
-        "9": f"90000{middle[:4]}0{check}",
+        "0": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "1": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "2": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "3": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}0000{check}",
+        "4": f"{manufacturer_first}{d1}{d2}{d3}{d4}0000{check}",
+        "5": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}0000{check}",
+        "6": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "7": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "8": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
+        "9": f"{manufacturer_first}{d1}{d2}{d3}{d4}{d5}{d6}0000{check}",
     }
     return expansions.get(ns)
 

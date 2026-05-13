@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keepa Scout — API 测试台</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #21253a;
+    --border: #2d3154;
+    --accent: #6c8cff;
+    --accent2: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #8892b0;
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --code-bg: #12141e;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 36px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  header h1 span {
+    color: var(--accent);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .badge-green { background: rgba(52,211,153,0.15); color: var(--green); }
+  .badge-red   { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-yellow{ background: rgba(251,191,36,0.15);  color: var(--yellow); }
+  .badge-muted { background: rgba(136,146,176,0.1);  color: var(--muted); }
+
+  /* ── Health bar ── */
+  #health-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .health-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .health-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .health-dot.ok    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .health-dot.error { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab {
+    padding: 7px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    font-family: inherit;
+  }
+  .tab:hover  { color: var(--text); background: var(--card2); }
+  .tab.active { color: var(--accent); background: var(--card2); }
+
+  .tab-method {
+    display: inline-block;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 5px;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .method-get  { background: rgba(52,211,153,0.2); color: var(--green); }
+  .method-post { background: rgba(167,139,250,0.2); color: var(--accent2); }
+
+  /* ── Panels ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* ── Inputs ── */
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    width: 100%;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .input-row.single { grid-template-columns: 1fr; }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    padding: 9px 20px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0f1117;
+  }
+  .btn-primary:hover { background: #8aa8ff; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: var(--card2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Result ── */
+  .result-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    margin-top: 16px;
+  }
+
+  .result-box {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 12px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none;
+  }
+  .result-box.visible { display: block; }
+
+  .result-box .json-key    { color: #7dd3fc; }
+  .result-box .json-str    { color: #86efac; }
+  .result-box .json-num    { color: #fbbf24; }
+  .result-box .json-bool   { color: #f472b6; }
+  .result-box .json-null   { color: var(--muted); }
+  .result-box .json-colon  { color: var(--muted); }
+  .result-box .json-comma  { color: var(--muted); }
+
+  .result-box::-webkit-scrollbar { width: 6px; }
+  .result-box::-webkit-scrollbar-track { background: transparent; }
+  .result-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Eligibility table ── */
+  .check-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .check-item.pass { border-left: 3px solid var(--green); }
+  .check-item.fail { border-left: 3px solid var(--red); }
+  .check-icon { font-weight: 700; font-size: 14px; }
+  .check-icon.pass { color: var(--green); }
+  .check-icon.fail { color: var(--red); }
+  .check-name { color: var(--muted); min-width: 140px; }
+  .check-val { color: var(--text); flex: 1; }
+  .check-threshold { color: var(--muted); font-size: 11px; }
+
+  .eligibility-summary {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .summary-chip {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .summary-chip .s-label { color: var(--muted); margin-right: 6px; }
+  .summary-chip .s-val { font-weight: 700; }
+  .summary-chip .s-val.green { color: var(--green); }
+  .summary-chip .s-val.red   { color: var(--red); }
+
+  /* ── Chat ── */
+  .chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 380px;
+    overflow-y: auto;
+    margin-bottom: 14px;
+    padding-right: 4px;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    max-width: 85%;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user {
+    background: var(--accent);
+    color: #0f1117;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+  }
+  .msg.assistant {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+  }
+  .msg.system {
+    background: rgba(251,191,36,0.1);
+    border: 1px solid rgba(251,191,36,0.2);
+    color: var(--yellow);
+    align-self: flex-start;
+    font-size: 11px;
+  }
+
+  .session-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ── Batch textarea ── */
+  .batch-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Upc variants ── */
+  .upc-variants {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .upc-var {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  button:disabled .spinner { display: none; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 999;
+    max-width: 300px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+
+  /* ── Error highlight ── */
+  .error-msg {
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: var(--red);
+    font-size: 12px;
+    margin-top: 10px;
+  }
+
+  /* ── Intent chip ── */
+  .intent-chip {
+    display: inline-block;
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.3);
+    color: var(--accent2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>🔍 Keepa Scout <span>API 测试台</span></h1>
+    <div id="base-url-wrap">
+      <input type="text" id="base-url" value="http://localhost:8000"
+        style="width:220px; font-size:12px; background: var(--card2); border-color: var(--border);" />
+    </div>
+  </header>
+
+  <!-- Health -->
+  <div id="health-bar">
+    <div class="health-item">
+      <div class="health-dot" id="dot-api"></div>
+      <span>API</span>
+    </div>
+    <div class="health-item">
+      <div class="health-dot" id="dot-db"></div>
+      <span>Database</span>
+    </div>
+    <div class="health-item" id="health-timestamp" style="margin-left:auto; font-size:11px; color:var(--muted);">
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('tab-health')">
+      <span class="tab-method method-get">GET</span>/health
+    </button>
+    <button class="tab" onclick="showTab('tab-upc')">
+      <span class="tab-method method-get">GET</span>/upc
+    </button>
+    <button class="tab" onclick="showTab('tab-eligibility')">
+      <span class="tab-method method-get">GET</span>/eligibility/{asin}
+    </button>
+    <button class="tab" onclick="showTab('tab-batch')">
+      <span class="tab-method method-post">POST</span>/eligibility/batch
+    </button>
+    <button class="tab" onclick="showTab('tab-ask')">
+      <span class="tab-method method-post">POST</span>/ask
+    </button>
+    <button class="tab" onclick="showTab('tab-chat')">
+      <span class="tab-method method-post">POST</span>/chat
+    </button>
+  </div>
+
+  <!-- ─── /health ─── -->
+  <div class="panel active" id="tab-health">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Health Check</div>
+        <span class="badge badge-muted">GET /health</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-health" onclick="doHealth()">
+          <span class="spinner" style="display:none;"></span>发送请求
+        </button>
+      </div>
+      <div class="result-label">Response</div>
+      <div class="result-box" id="res-health"></div>
+    </div>
+  </div>
+
+  <!-- ─── /upc ─── -->
+  <div class="panel" id="tab-upc">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">UPC 解析</div>
+        <span class="badge badge-muted">GET /upc?upc=...</span>
+      </div>
+      <div class="input-row single">
+        <div>
+          <label>UPC / EAN / ISBN</label>
+          <input type="text" id="upc-input" placeholder="例如: 012345678905 或 978-0-13-468599-1" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-upc" onclick="doUpc()">
+          <span class="spinner" style="display:none;"></span>查询
+        </button>
+        <button class="btn-ghost" onclick="upcExamples()">示例</button>
+      </div>
+      <div class="result-label">Response</div>
+      <div class="result-box" id="res-upc"></div>
+    </div>
+  </div>
+
+  <!-- ─── /eligibility/{asin} ─── -->
+  <div class="panel" id="tab-eligibility">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">单品资质审核</div>
+        <span class="badge badge-muted">GET /eligibility/{asin}</span>
+      </div>
+      <div class="input-row single">
+        <div>
+          <label>ASIN</label>
+          <input type="text" id="el-asin" placeholder="例如: B00HEON30Y" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-el" onclick="doEligibility()">
+          <span class="spinner" style="display:none;"></span>查询
+        </button>
+        <button class="btn-ghost" onclick="elExamples()">示例</button>
+      </div>
+      <div id="el-result-area"></div>
+    </div>
+  </div>
+
+  <!-- ─── /eligibility/batch ─── -->
+  <div class="panel" id="tab-batch">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">批量资质审核</div>
+        <span class="badge badge-muted">POST /eligibility/batch</span>
+      </div>
+      <div class="input-row single">
+        <div>
+          <label>ASIN 列表（一行一个，或逗号分隔）</label>
+          <textarea id="batch-asins" placeholder="B00HEON30Y&#10;B006JVZXJM&#10;B010MU00UM"></textarea>
+          <div class="batch-hint">支持一次性提交多个 ASIN，数据库有记录则返回，无记录则标 not_found</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-batch" onclick="doBatch()">
+          <span class="spinner" style="display:none;"></span>批量查询
+        </button>
+      </div>
+      <div id="batch-result-area"></div>
+    </div>
+  </div>
+
+  <!-- ─── /ask ─── -->
+  <div class="panel" id="tab-ask">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">自然语言查询（DeepSeek）</div>
+        <span class="badge badge-muted">POST /ask</span>
+      </div>
+      <div class="input-row single">
+        <div>
+          <label>问题</label>
+          <textarea id="ask-question" placeholder="哪些 ASIN 的 ROI 超过 20%？" style="min-height:120px;"></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-ask" onclick="doAsk()">
+          <span class="spinner" style="display:none;"></span>查询
+        </button>
+        <button class="btn-ghost" onclick="askExamples()">示例问题</button>
+      </div>
+      <div class="result-label">Answer</div>
+      <div class="result-box" id="res-ask-answer" style="display:none;"></div>
+      <div class="result-label" id="res-ask-sql-label" style="display:none;">Generated SQL</div>
+      <div class="result-box" id="res-ask-sql" style="display:none;"></div>
+      <div id="ask-result-area"></div>
+    </div>
+  </div>
+
+  <!-- ─── /chat ─── -->
+  <div class="panel" id="tab-chat">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">对话式查询（带 Session 记忆）</div>
+        <span class="badge badge-muted">POST /chat</span>
+      </div>
+      <div class="input-row">
+        <div>
+          <label>Session ID</label>
+          <input type="text" id="chat-session" placeholder="user_001" />
+        </div>
+        <div>
+          <label>Intent / Topic</label>
+          <input type="text" id="chat-intent" placeholder="—" readonly style="color:var(--muted);" />
+        </div>
+      </div>
+      <div class="session-meta" id="chat-meta"></div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="input-row single" style="margin-bottom:0;">
+        <div>
+          <label>发送消息</label>
+          <textarea id="chat-input" placeholder="输入问题后按发送..." style="min-height:60px; margin-bottom:0;"
+            onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); doChat(); }"></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-chat" onclick="doChat()">
+          <span class="spinner" style="display:none;"></span>发送
+        </button>
+        <button class="btn-ghost" onclick="clearChat()">清空对话</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  // ── Base URL ──────────────────────────────────────────────────────────────
+  function getBase() {
+    return document.getElementById('base-url').value.replace(/\/$/, '');
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  function toast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    setTimeout(() => { t.className = ''; }, 3000);
+  }
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  function showTab(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // ── JSON syntax highlight ───────────────────────────────────────────────────
+  function syntaxHighlight(json) {
+    const escaped = json
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return escaped.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      function (match) {
+        let cls = 'json-num';
+        if (/^"/.test(match)) {
+          cls = /:$/.test(match) ? 'json-key' : 'json-str';
+        } else if (/true|false/.test(match)) {
+          cls = 'json-bool';
+        } else if (/null/.test(match)) {
+          cls = 'json-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+      }
+    );
+  }
+
+  function formatAndShow(elId, data, raw=false) {
+    const el = document.getElementById(elId);
+    if (raw) {
+      el.innerHTML = '<span class="json-str">' + data + '</span>';
+    } else {
+      el.innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+    }
+    el.classList.add('visible');
+  }
+
+  // ── Loading state ───────────────────────────────────────────────────────────
+  function setLoading(btnId, on) {
+    const btn = document.getElementById(btnId);
+    const spinner = btn.querySelector('.spinner');
+    if (spinner) spinner.style.display = on ? 'inline-block' : 'none';
+    btn.disabled = on;
+  }
+
+  // ── Health ──────────────────────────────────────────────────────────────────
+  async function doHealth() {
+    const btn = document.getElementById('btn-health');
+    setLoading('btn-health', true);
+    try {
+      const r = await fetch(`${getBase()}/health`);
+      const d = await r.json();
+      const dotApi = document.getElementById('dot-api');
+      const dotDb  = document.getElementById('dot-db');
+      dotApi.className = 'health-dot ok';
+      dotDb.className  = 'health-dot ' + (d.db === 'ok' ? 'ok' : 'error');
+      document.getElementById('health-timestamp').textContent = d.timestamp;
+      formatAndShow('res-health', d);
+    } catch(e) {
+      document.getElementById('dot-api').className = 'health-dot error';
+      document.getElementById('dot-db').className  = 'health-dot error';
+      formatAndShow('res-health', '请求失败: ' + e.message, true);
+    }
+    setLoading('btn-health', false);
+  }
+
+  // ── UPC ─────────────────────────────────────────────────────────────────────
+  async function doUpc() {
+    const upc = document.getElementById('upc-input').value.trim();
+    if (!upc) { toast('请输入 UPC', 'error'); return; }
+    setLoading('btn-upc', true);
+    try {
+      const r = await fetch(`${getBase()}/upc?upc=${encodeURIComponent(upc)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+      let html = `<div class="upc-variants">`;
+      for (const v of (d.normalized || [])) {
+        html += `<span class="upc-var">${v}</span>`;
+      }
+      html += `</div>`;
+      if (d.asins && d.asins.length > 0) {
+        html += `<div style="margin-top:8px; font-size:12px; color:var(--muted);">找到 ${d.asins.length} 个 ASIN：<b style="color:var(--text);">${d.asins.join(', ')}</b></div>`;
+      } else {
+        html += `<div class="error-msg" style="margin-top:8px;">未找到任何 ASIN（UPC 格式可能不被 Keepa 支持）</div>`;
+      }
+      const box = document.getElementById('res-upc');
+      box.innerHTML = html + `<pre style="margin-top:10px;">${syntaxHighlight(JSON.stringify(d, null, 2))}</pre>`;
+      box.classList.add('visible');
+      toast(`找到 ${d.asins.length} 个 ASIN`);
+    } catch(e) {
+      formatAndShow('res-upc', '错误: ' + e.message, true);
+      toast(e.message, 'error');
+    }
+    setLoading('btn-upc', false);
+  }
+
+  function upcExamples() {
+    document.getElementById('upc-input').value = '012345678905';
+  }
+
+  // ── Eligibility ─────────────────────────────────────────────────────────────
+  async function doEligibility() {
+    const asin = document.getElementById('el-asin').value.trim().toUpperCase();
+    if (!asin) { toast('请输入 ASIN', 'error'); return; }
+    setLoading('btn-el', true);
+    const area = document.getElementById('el-result-area');
+    area.innerHTML = '';
+    try {
+      const r = await fetch(`${getBase()}/eligibility/${encodeURIComponent(asin)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+      // Summary chips
+      let chips = `
+        <div class="eligibility-summary">
+          <div class="summary-chip">
+            <span class="s-label">eligible:</span>
+            <span class="s-val ${d.eligible ? 'green' : 'red'}">${d.eligible ? '✅ 是' : '❌ 否'}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="s-label">ROI:</span>
+            <span class="s-val">${d.computed_roi_pct != null ? d.computed_roi_pct.toFixed(1) + '%' : '—'}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="s-label">BuyBox:</span>
+            <span class="s-val">${d.buybox != null ? '$' + d.buybox.toFixed(2) : '—'}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="s-label">Amazon占比:</span>
+            <span class="s-val">${d.amazon_buybox_pct != null ? d.amazon_buybox_pct + '%' : '—'}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="s-label">失败原因:</span>
+            <span class="s-val red">${d.filter_failed || '无'}</span>
+          </div>
+        </div>`;
+
+      // Check items
+      let checks = '<div class="check-list">';
+      const checks_data = d.checks || {};
+      const checkLabels = {
+        referral_fee:    'Referral Fee 存在',
+        demand:          '需求量（排名/月销）',
+        buybox:          'BuyBox ≥ $10',
+        amazon_pct:      'Amazon 占比 ≤ 80%',
+        monthly_sold_min:'月销 ≥ 100（可选）',
+      };
+      for (const [k, v] of Object.entries(checks_data)) {
+        const label = checkLabels[k] || k;
+        const val = typeof v.value === 'object'
+          ? JSON.stringify(v.value)
+          : (v.value != null ? String(v.value) : '—');
+        checks += `
+          <div class="check-item ${v.pass_ ? 'pass' : 'fail'}">
+            <span class="check-icon ${v.pass_ ? 'pass' : 'fail'}">${v.pass_ ? '✔' : '✘'}</span>
+            <span class="check-name">${label}</span>
+            <span class="check-val">${val}</span>
+            <span class="check-threshold">阈值: ${v.threshold || '—'}</span>
+          </div>`;
+      }
+      checks += '</div>';
+
+      area.innerHTML = chips + checks;
+
+      const resBox = document.createElement('div');
+      resBox.className = 'result-box visible';
+      resBox.innerHTML = '<pre>' + syntaxHighlight(JSON.stringify(d, null, 2)) + '</pre>';
+      area.appendChild(resBox);
+      toast(d.eligible ? '✅ eligible' : '❌ not eligible');
+    } catch(e) {
+      area.innerHTML = `<div class="error-msg">${e.message}</div>`;
+      toast(e.message, 'error');
+    }
+    setLoading('btn-el', false);
+  }
+
+  function elExamples() {
+    document.getElementById('el-asin').value = 'B00HEON30Y';
+  }
+
+  // ── Batch ────────────────────────────────────────────────────────────────────
+  async function doBatch() {
+    const raw = document.getElementById('batch-asins').value.trim();
+    if (!raw) { toast('请输入 ASIN 列表', 'error'); return; }
+    const asins = raw.split(/[\n,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (asins.length === 0) { toast('没有有效的 ASIN', 'error'); return; }
+    setLoading('btn-batch', true);
+    const area = document.getElementById('batch-result-area');
+    area.innerHTML = `<div style="font-size:12px; color:var(--muted); margin-bottom:10px;">共 ${asins.length} 个 ASIN，查询中...</div>`;
+    try {
+      const r = await fetch(`${getBase()}/eligibility/batch`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ asins }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+      const eligible = d.results.filter(x => x.eligible);
+      area.innerHTML = `
+        <div style="font-size:12px; margin-bottom:10px;">
+          <span class="badge badge-green">✅ eligible: ${eligible.length}</span>
+          <span class="badge badge-red" style="margin-left:6px;">❌ not eligible: ${d.results.length - eligible.length}</span>
+        </div>
+        <div class="result-box visible" style="font-size:12px;">
+${syntaxHighlight(JSON.stringify(d, null, 2))}
+        </div>`;
+      toast(`返回 ${d.results.length} 条结果`);
+    } catch(e) {
+      area.innerHTML = `<div class="error-msg">${e.message}</div>`;
+      toast(e.message, 'error');
+    }
+    setLoading('btn-batch', false);
+  }
+
+  // ── Ask ─────────────────────────────────────────────────────────────────────
+  async function doAsk() {
+    const q = document.getElementById('ask-question').value.trim();
+    if (!q) { toast('请输入问题', 'error'); return; }
+    setLoading('btn-ask', true);
+    const answerBox = document.getElementById('res-ask-answer');
+    const sqlBox    = document.getElementById('res-ask-sql');
+    const sqlLabel  = document.getElementById('res-ask-sql-label');
+    const area      = document.getElementById('ask-result-area');
+    answerBox.classList.remove('visible');
+    sqlBox.classList.remove('visible');
+    sqlLabel.style.display = 'none';
+    area.innerHTML = '';
+    try {
+      const r = await fetch(`${getBase()}/ask`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ question: q }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+      answerBox.innerHTML = d.answer ? d.answer.replace(/\n/g, '<br>') : '（无回答）';
+      answerBox.classList.add('visible');
+
+      if (d.sql) {
+        sqlBox.innerHTML = syntaxHighlight(d.sql);
+        sqlBox.classList.add('visible');
+        sqlLabel.style.display = 'block';
+      }
+
+      if (d.rows && d.rows.length > 0) {
+        const tableHeaders = Object.keys(d.rows[0]);
+        let table = '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;">';
+        table += '<tr>' + tableHeaders.map(h => `<th style="text-align:left;padding:6px 10px;background:var(--card2);border-bottom:1px solid var(--border);color:var(--accent);">${h}</th>`).join('') + '</tr>';
+        for (const row of d.rows) {
+          table += '<tr>' + tableHeaders.map(h => `<td style="padding:5px 10px;border-bottom:1px solid var(--border);">${row[h] ?? ''}</td>`).join('') + '</tr>';
+        }
+        table += '</table>';
+        area.innerHTML = `<div class="result-label">Result Rows (${d.row_count})</div>` + table;
+      }
+
+      if (d.out_of_scope) {
+        area.innerHTML = `<div class="error-msg" style="margin-top:10px;">⚠️ 问题超出数据库范围（out_of_scope）</div>` + area.innerHTML;
+      }
+
+      toast(`返回 ${d.row_count} 行`);
+    } catch(e) {
+      answerBox.innerHTML = '错误: ' + e.message;
+      answerBox.classList.add('visible');
+      toast(e.message, 'error');
+    }
+    setLoading('btn-ask', false);
+  }
+
+  function askExamples() {
+    const qs = [
+      '哪些 ASIN 的 ROI 超过 20%？',
+      'Amazon BuyBox 占比最高的前 5 个商品是什么？',
+      '平均月销量最高的品类是哪个？',
+      '给我所有符合资质的商品列表',
+    ];
+    const q = qs[Math.floor(Math.random() * qs.length)];
+    document.getElementById('ask-question').value = q;
+  }
+
+  // ── Chat ────────────────────────────────────────────────────────────────────
+  let _chatHistory = [];
+
+  async function doChat() {
+    const session = document.getElementById('chat-session').value.trim() || 'default';
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    setLoading('btn-chat', true);
+    _chatHistory.push({ role: 'user', content: msg });
+    renderChat();
+
+    try {
+      const r = await fetch(`${getBase()}/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ session_id: session, message: msg }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+
+      _chatHistory.push({ role: 'assistant', content: d.answer });
+      if (d.intent && d.intent.intent) {
+        document.getElementById('chat-intent').value = d.intent.intent;
+      }
+      if (d.intent && d.intent.resolved_asin) {
+        document.getElementById('chat-intent').value +=
+          (document.getElementById('chat-intent').value ? ' | ' : '') +
+          `resolved: ${d.intent.resolved_asin}`;
+      }
+      document.getElementById('chat-meta').textContent =
+        `session: ${session} | ${_chatHistory.length} 条消息`;
+
+      if (d.results && d.results.length > 0) {
+        const last = _chatHistory[_chatHistory.length - 1];
+        last._has_results = true;
+        last._results = d.results;
+      }
+
+      renderChat();
+      toast('收到回复');
+    } catch(e) {
+      _chatHistory.push({ role: 'assistant', content: '❌ 错误: ' + e.message });
+      renderChat();
+      toast(e.message, 'error');
+    }
+    setLoading('btn-chat', false);
+  }
+
+  function renderChat() {
+    const box = document.getElementById('chat-messages');
+    let html = '';
+    for (const m of _chatHistory) {
+      if (m.role === 'system') {
+        html += `<div class="msg system">${m.content}</div>`;
+      } else {
+        html += `<div class="msg ${m.role}">${m.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+        if (m._has_results && m._results) {
+          const headers = Object.keys(m._results[0]);
+          html += `<div style="font-size:11px; color:var(--muted); margin: -6px 0 8px 16px;">📊 ${m._results.length} 行结果</div>`;
+          html += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;margin-left:16px;font-size:11px;max-width:600px;">
+            <tr>${headers.map(h=>`<th style="text-align:left;padding:4px 8px;background:var(--card2);color:var(--accent);border-bottom:1px solid var(--border);white-space:nowrap;">${h}</th>`).join('')}</tr>
+            ${m._results.map(row=>`<tr>${headers.map(h=>`<td style="padding:4px 8px;border-bottom:1px solid var(--border);white-space:nowrap;">${row[h]??''}</td>`).join('')}</tr>`).join('')}
+          </table>`;
+        }
+      }
+    }
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function clearChat() {
+    _chatHistory = [];
+    renderChat();
+    document.getElementById('chat-intent').value = '';
+    document.getElementById('chat-meta').textContent = '';
+  }
+
+  // ── Init: auto health check ──────────────────────────────────────────────────
+  window.addEventListener('load', () => {
+    doHealth();
+  });
+</script>
+</body>
+</html>
