@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_PATH = os.getenv("DB_PATH", "/app/data/scout.db")
+DB_PATH = os.getenv("DB_PATH", "data/scout.db")
+# Resolve relative paths from project root (one level above app/)
+if not os.path.isabs(DB_PATH):
+    DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), DB_PATH)
+
 DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
