@@ -1,86 +1,118 @@
-# Keepa Scout — 笔试题
+# Keepa Scout API — 中文说明
 
-本仓库包含一份 AI 全栈工程师岗位的笔试题。完整任务说明、交付要求、评分标准
-与示例交互都在 `candidate_package/` 下。请先阅读：
+## 我们的目标是什么
 
-> [`candidate_package/CHALLENGE.md`](candidate_package/CHALLENGE.md)
+帮做亚马逊转售（Amazon Arbitrage）的人，从海量商品里**找到能赚钱的ASIN**。
 
-附加资料：
+具体来说：用户给我们一个商品ID（ASIN），我们回答三个问题：
 
-- [`candidate_package/KEEPA_QUICKSTART.md`](candidate_package/KEEPA_QUICKSTART.md) — Keepa API 起手包
-- [`candidate_package/env.example`](candidate_package/env.example) — 环境变量模板（含已分配的 Keepa keys）
-- [`candidate_package/Dockerfile.example`](candidate_package/Dockerfile.example) — 参考 Dockerfile
-- [`candidate_package/docker-compose.example.yml`](candidate_package/docker-compose.example.yml) — 参考 docker-compose
-- [`candidate_package/data/sample_asins.csv`](candidate_package/data/sample_asins.csv) — 30 个 ASIN，ETL 输入
-- [`candidate_package/data/upc_test_cases.json`](candidate_package/data/upc_test_cases.json) — 7 个 UPC 测试输入
+1. **这个商品能不能卖？** （5条规则全部通过才行）
+2. **能赚多少钱？** （计算ROI，投资回报率）
+3. **我可以用自然语言问问题吗？** 比如"有多少商品符合条件？"
 
-## 启动
+---
 
-```bash
-# 1. 克隆本仓库
-git clone <本仓库 URL> && cd keepa_scout_challenge
+## 我们做了哪些事
 
-# 2. 在你自己的工作目录里准备 .env（Keepa key 已经在里面）
-cp candidate_package/env.example .env
-# 编辑 .env，按需填入你的 LLM key
+### 一套完整的 API 服务（5个接口）
 
-# 3. 写你的实现。参考 Dockerfile.example / docker-compose.example.yml，
-#    但请按你的实现改名为 Dockerfile / docker-compose.yml。
+| 接口 | 干什么 |
+|---|---|
+| `GET /upc` | 条形码 → 找ASIN |
+| `GET /eligibility/{asin}` | 单个商品 → 能不能卖 + 能赚多少 |
+| `POST /eligibility/batch` | 批量检查多个商品 |
+| `POST /ask` | 自然语言问问题 → AI生成SQL → 查数据库 → 回答 |
+| `POST /chat` | 多轮对话，支持"上一个结果里第二个"这种指代 |
 
-# 4. 起服务
-docker compose up --build
+---
+
+## 达成的主要目标
+
+### ✅ 批量 eligibility 检查
+ETL 脚本从 Keepa 拉数据存到 SQLite，问 5 条规则：
+
+| 规则 | 含义 | 阈值 |
+|---|---|---|
+| referral_fee_pct | Amazon 收的佣金比例 | 必须 > 0 |
+| demand（销量） | 有没有人买 | 排名≤10万 或 月销≥100 |
+| buybox | 黄金购物车价格 | ≥ $10 |
+| amazon_pct | Amazon自营占比 | ≤ 80% |
+| monthly_sold | 月销量 | null 或 ≥ 100 |
+
+### ✅ ROI 计算
+```
+利润 = 卖价 - Amazon佣金 - FBA打包费 - $0.50仓储
+ROI = 利润 / 进货成本 × 100%
 ```
 
-LLM 服务商任选 —— 海外（OpenAI / Anthropic / Gemini）或国内（DeepSeek /
-Moonshot Kimi / 通义千问 Qwen / 智谱 GLM / 豆包 / Yi）都可以。
+### ✅ 自然语言问问题
+用 DeepSeek AI，把你的问题转成 SQL 语句，安全执行，再把结果用自然语言回答你。
 
-提交窗口：**72 小时**。
+### ✅ 多轮对话记忆
+聊完"给我高ROI的" → 再问"加个价格限制" → 系统记得你之前筛的是什么。
 
-## 提交方式
+---
 
-回复原邮件，附上：
+## Amazon 内部术语解释表
 
-1. **Git 仓库 URL**（公开 GitHub / GitLab，commit 历史颗粒度合理）
-2. **Loom 视频链接** —— ≤ 5 分钟，必须同时有摄像头画面 + 屏幕录制
-3. 简要说明你完成了哪些部分，以及如果有更多时间还会做什么
+> 以下术语是美国亚马逊内部概念，对应英文原词，供你对照理解：
 
-## Docker
+| 中文常用说法 | 英文术语 | 解释 |
+|---|---|---|
+| ASIN | ASIN | Amazon 商品ID，10位字母数字，如 B00HEON30Y，类似于淘宝的"商品链接ID" |
+| BuyBox | BuyBox / Buy Box | 页面右上角那个"加入购物车"按钮区域。谁赢得BuyBox，谁就能得到大多数订单 |
+| 黄金购物车 | BuyBox | 同上，中文俗称"黄金购物车" |
+| 跟卖 | Arbitrage / Retail Arbitrage | 买进别人已经上架的商品，在亚马逊上转卖，赚差价 |
+| 佣金 | Referral Fee | Amazon 每卖出一件收的手续费，按销售额比例收，类目不同比例不同（6%~17%） |
+| FBA 打包费 | FBA Pick & Pack Fee | Amazon 帮你拣货、打包、发货的服务费，按件收 |
+| 销售排名 | Sales Rank / BSR (Best Sellers Rank) | 这个商品在亚马逊所有商品里的销量排名。排名越小卖得越好 |
+| 月销量 | Monthly Sold | 每月估算卖出多少件 |
+| 亚马逊自营占比 | Amazon BuyBox % | 亚马逊自营赢得购物车的比例，太高说明竞争激烈不适合跟卖 |
+| 供货商成本 | Supplier Cost | 你从批发商/零售商买这个商品花了多少钱 |
+| 利润 | Payout / Net | 卖一件到手的钱（扣除所有费用后） |
+| ROI | ROI (Return on Investment) | 投资回报率，公式：(利润 / 成本) × 100% |
+| 转售 | Resell / Arbitrage | 买进再卖出 |
+| Keepa | Keepa | 抓取亚马逊历史数据的第三方工具，可以看到价格、排名变化 |
+| UPC | UPC (Universal Product Code) | 商品条形码，12位数字，贴在每个零售商品上 |
+| EAN | EAN (European Article Number) | 欧洲版UPC，13位，和UPC功能一样 |
+| ISBN | ISBN | 书籍专用码，10位或13位 |
+| UPC-E | UPC-E | 缩写版条形码，6-8位，展开后是12位UPC-A |
 
-**必须项**：你的提交需要能用 `docker compose up --build` 一键起来，对外暴露
-`:8000` 上的 5 个 endpoint。
+---
 
-- `Dockerfile.example` 和 `docker-compose.example.yml` 是参考起点
-- 这两个文件是 SQLite 路线的最小版本；如果你用 Postgres 自己加 `db` 服务
-- 你的 `.env` 文件要被 `docker-compose.yml` 读到（参考 example 里的 `env_file:`）
-- ETL 应该在容器启动时自动跑（参考 example 里 CMD 的 `python -m app.etl &&` 部分）
+## 技术架构（简化说明）
 
-## CI（可选，不强制）
+```
+你问问题（自然语言）
+       ↓
+DeepSeek AI 转成 SQL 语句
+       ↓
+安全检查（只允许 SELECT，禁止删除/修改）
+       ↓
+查 SQLite 数据库
+       ↓
+DeepSeek 把数据格式化成自然语言回答
+```
 
-不要求做 CI。但如果你愿意加一个 GitHub Actions 工作流验证 `docker compose up`
-能 boot + 每个端点能响应，**算加分项**（说明你有自动化意识）。
+数据库里有我们提前从 Keepa 拉好的商品数据（价格、排名、佣金、销量等），每次运行 ETL 脚本更新。
 
-如果做：
+---
 
-- 放在 `.github/workflows/`（仓库根目录下）
-- secrets 在 GitHub Settings → Secrets and variables → Actions 里配 
-- 跑 `docker compose up -d`，curl 每个端点验证返回 2xx
-- 不用真打 Keepa（可以用 mock 或者直接验证 /health 上来就行）
+## 怎么运行
 
-我们不会因为你**没做** CI 而扣分，但做了会让我们对你的工程习惯印象更好。
+```bash
+# 1. 安装依赖
+pip install -r requirements.txt
 
-## 时间预算
+# 2. 配置 API Key
+cp .env.example .env
+# 编辑 .env，填入 KEEPA_API_KEYS 和 DEEPSEEK_API_KEY
 
-整个任务设计为在 **≤ 4 小时** 内完成（可以使用 Claude Code / Cursor /
-Copilot 等 AI 辅助工具）。如果 4 小时内做不完也没关系，提交已完成的部分，
-在 `REPORT.md` 中说明剩下的计划即可。
+# 3. 从 Keepa 拉数据（ETL）
+python -m app.etl
 
-## 关于 AI 工具
+# 4. 启动服务
+uvicorn app.main:app --reload --port 8000
+```
 
-允许使用 Claude Code / Cursor / Copilot / ChatGPT 等任何 AI 工具。但请注意：
-
-- Loom 视频中你需要能讲清楚仓库里**每一个文件**做什么。如果你对某段代码
-  讲不清，我们能看出来。
-- 在 `REPORT.md` 中如实写明：用了哪些 AI 工具、哪个模型、哪些代码是你
-  让 AI 生成的、哪些是你自己写或改的。
-
-我们希望招的是能驾驭这些工具、并对自己的工程判断负责的人。
+打开 http://localhost:8000/docs 可以看到交互式文档，直接在网页上测试每个接口。

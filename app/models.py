@@ -33,6 +33,7 @@ class Asin(Base):
         Index("idx_eligible", "eligible"),
         Index("idx_roi", "computed_roi_pct"),
         Index("idx_amazon_buybox_pct", "amazon_buybox_pct"),
+        Index("idx_eligible_roi", "eligible", "computed_roi_pct"),
     )
 
 
