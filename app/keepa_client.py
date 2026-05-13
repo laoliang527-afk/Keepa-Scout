@@ -80,21 +80,23 @@ class KeepaClient:
         向 Keepa 发起一次 GET 请求。
 
         逻辑：
-          - 按优先级顺序尝试每个 Key
-          - 遇到 402/429/422 错误自动跳过并尝试下一个 Key
+          - 按顺序尝试每个 Key（index 1 优先，有更稳定的 300 token 配额）
+          - 遇到 402（token 耗尽）/429（限流）/400（无效 key）/422（格式错误）自动切 key
           - 记录 token 消耗
           - 全部 Key 失败后抛出 RuntimeError
         """
-        params["key"] = self._key
         params["domain"] = KEEPA_DOMAIN
 
+        retry_statuses = {402, 429, 400, 422}
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            tried = set()
-            for order_idx in _KEY_ORDER:
-                self._idx = order_idx
-                if order_idx in tried:
-                    continue
-                tried.add(order_idx)
+            tried_count = 0
+            max_attempts = len(self.keys) * len(_KEY_ORDER)
+            for _ in range(max_attempts):
+                params["key"] = self._key
+                if tried_count > 0:
+                    self._next_key()
+                tried_count += 1
                 try:
                     resp = await client.get(
                         f"{KEEPA_BASE}/product",
@@ -105,16 +107,11 @@ class KeepaClient:
                         if "tokensConsumed" in body:
                             self._tokens_used += body["tokensConsumed"]
                         return body
-                    elif resp.status_code in (402, 429):
-                        # Token 耗尽或限流，尝试下一个 Key
+                    if resp.status_code in retry_statuses:
                         continue
-                    elif resp.status_code == 422:
-                        # 无效 ASIN/UPC 格式，本轮请求结束
-                        continue
-                    else:
-                        resp.raise_for_status()
+                    resp.raise_for_status()
                 except httpx.HTTPStatusError as e:
-                    if e.response.status_code in (402, 429, 422):
+                    if e.response.status_code in retry_statuses:
                         continue
                     raise
         raise RuntimeError("All Keepa keys exhausted")

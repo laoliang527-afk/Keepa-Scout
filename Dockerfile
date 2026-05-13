@@ -27,4 +27,9 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -m app.etl && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# uvicorn is the main process (healthcheck depends on it)
+# ETL runs in background — its failure is logged but does NOT crash the container
+CMD ["/entrypoint.sh"]

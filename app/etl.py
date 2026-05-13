@@ -194,4 +194,11 @@ async def run_etl():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_etl())
+    import traceback
+    try:
+        asyncio.run(run_etl())
+    except Exception:
+        traceback.print_exc()
+        print("ETL failed — continuing (server stays up for healthcheck)")
+        # Exit 0 so the container doesn't crash
+        # ETL errors are logged above, the app can still serve requests
