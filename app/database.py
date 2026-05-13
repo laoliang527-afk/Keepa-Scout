@@ -12,6 +12,8 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 # 加载 .env 中的环境变量（如 DB_PATH、KEEPA_API_KEY 等）
 load_dotenv()
